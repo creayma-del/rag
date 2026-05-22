@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+
+# Python 虚拟环境
+venv/
+.venv/
+env/
+
+# 环境变量（含密钥）
+backend/.env
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+
+# 运行时数据（日志、PID、向量库、聊天记录）
+.runtime/
+data/
+
+# IDE / 编辑器
+.idea/
+.vscode/
+.trae/
+.qoder/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 上传的文档资源
+documents/

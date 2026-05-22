@@ -1,0 +1,915 @@
+/* Design System - Futuristic Tech Style */
+:root {
+  --bg-primary: #0f0c29;
+  --bg-secondary: #302b63;
+  --bg-tertiary: #24243e;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+
+  --accent-primary: #00d4ff;
+  --accent-secondary: #7b2cbf;
+  --accent-tertiary: #00f593;
+  --accent-danger: #ff6b6b;
+  --accent-warning: #ffd93d;
+
+  --text-primary: #ffffff;
+  --text-secondary: #b8c5d6;
+  --text-muted: #6b7280;
+
+  --shadow-soft: 0 8px 32px rgba(0, 212, 255, 0.15);
+  --shadow-glow: 0 0 40px rgba(0, 212, 255, 0.3);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Element Plus CSS Variables Override */
+  --el-color-primary: #00d4ff;
+  --el-color-primary-light-3: #33ddff;
+  --el-color-primary-light-5: #66e5ff;
+  --el-color-primary-light-7: #99edff;
+  --el-color-primary-light-8: #b3f2ff;
+  --el-color-primary-light-9: #ccf7ff;
+  --el-color-primary-dark-2: #00aacc;
+  --el-color-success: #00f593;
+  --el-color-success-light-3: #33f7a9;
+  --el-color-success-light-5: #66f9bb;
+  --el-color-success-light-9: #ccfde8;
+  --el-color-warning: #ffd93d;
+  --el-color-warning-light-3: #ffe166;
+  --el-color-warning-light-5: #ffe88c;
+  --el-color-warning-light-9: #fff7db;
+  --el-color-danger: #ff6b6b;
+  --el-color-danger-light-3: #ff8a8a;
+  --el-color-danger-light-5: #ffa6a6;
+  --el-color-danger-light-9: #ffe0e0;
+  --el-color-info: #6b7280;
+  --el-color-info-light-3: #8a8f99;
+  --el-color-info-light-5: #a5a9b0;
+  --el-color-info-light-9: #e0e1e3;
+  --el-bg-color: #0f0c29;
+  --el-bg-color-overlay: #24243e;
+  --el-bg-color-page: #0f0c29;
+  --el-text-color-primary: #ffffff;
+  --el-text-color-regular: #b8c5d6;
+  --el-text-color-secondary: #b8c5d6;
+  --el-text-color-placeholder: #6b7280;
+  --el-border-color: rgba(255, 255, 255, 0.1);
+  --el-border-color-light: rgba(255, 255, 255, 0.06);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.04);
+  --el-border-color-extra-light: rgba(255, 255, 255, 0.03);
+  --el-fill-color: rgba(255, 255, 255, 0.05);
+  --el-fill-color-light: rgba(255, 255, 255, 0.03);
+  --el-fill-color-lighter: rgba(255, 255, 255, 0.02);
+  --el-fill-color-extra-light: rgba(255, 255, 255, 0.01);
+  --el-fill-color-blank: #24243e;
+  --el-mask-color: rgba(0, 0, 0, 0.6);
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 16px;
+  --el-font-size-base: 14px;
+  --el-font-weight-primary: 500;
+  --el-transition-duration: 0.3s;
+  --el-transition-duration-fast: 0.15s;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-tertiary) 100%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Animated background */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 20% 80%, rgba(123, 44, 191, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0, 212, 255, 0.25) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(0, 245, 147, 0.15) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+  animation: gradientShift 15s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Glassmorphism card */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  transition: all var(--transition-normal);
+}
+
+.glass-card:hover {
+  border-color: rgba(0, 212, 255, 0.3);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Button styling */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  transition: all var(--transition-normal);
+  box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 212, 255, 0.4);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  transition: all var(--transition-normal);
+}
+
+.btn-secondary:hover {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent-primary);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--accent-tertiary) 0%, #00c485 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  transition: all var(--transition-normal);
+  box-shadow: 0 4px 15px rgba(0, 245, 147, 0.3);
+}
+
+.btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 245, 147, 0.4);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-normal);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--accent-secondary) 0%, var(--accent-primary) 100%);
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 212, 255, 0.3);
+  color: white;
+}
+
+/* ============================================================
+   Element Plus Global Theme Overrides
+   ============================================================ */
+
+/* --- Button --- */
+.el-button {
+  border-radius: var(--radius-md) !important;
+  font-weight: 500 !important;
+  transition: all var(--transition-normal) !important;
+}
+
+.el-button--primary {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3) !important;
+  color: #fff !important;
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(0, 212, 255, 0.4) !important;
+  background: linear-gradient(135deg, #33ddff 0%, #8b3fd4 100%) !important;
+}
+
+.el-button--primary:active {
+  transform: translateY(0) !important;
+}
+
+.el-button--default {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid var(--glass-border) !important;
+  color: var(--text-primary) !important;
+}
+
+.el-button--default:hover,
+.el-button--default:focus {
+  background: rgba(0, 212, 255, 0.12) !important;
+  border-color: rgba(0, 212, 255, 0.4) !important;
+  color: var(--accent-primary) !important;
+}
+
+.el-button--success {
+  background: linear-gradient(135deg, var(--accent-tertiary) 0%, #00c485 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(0, 245, 147, 0.3) !important;
+  color: #fff !important;
+}
+
+.el-button--success:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(0, 245, 147, 0.4) !important;
+}
+
+.el-button--danger {
+  background: linear-gradient(135deg, var(--accent-danger) 0%, #e04848 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3) !important;
+  color: #fff !important;
+}
+
+.el-button--danger:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4) !important;
+}
+
+.el-button--warning {
+  background: linear-gradient(135deg, var(--accent-warning) 0%, #e6c235 100%) !important;
+  border: none !important;
+  color: #1a1a2e !important;
+}
+
+.el-button--text,
+.el-button.is-link {
+  color: var(--text-secondary) !important;
+}
+
+.el-button--text:hover,
+.el-button.is-link:hover {
+  color: var(--accent-primary) !important;
+  background: rgba(0, 212, 255, 0.08) !important;
+}
+
+.el-button.is-disabled,
+.el-button.is-disabled:hover {
+  opacity: 0.5 !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* --- Input --- */
+.el-input__wrapper {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  transition: all var(--transition-normal) !important;
+}
+
+.el-input__wrapper:hover {
+  border-color: rgba(0, 212, 255, 0.4) !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+.el-input__wrapper.is-focus {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.el-input__inner {
+  color: var(--text-primary) !important;
+}
+
+.el-input__inner::placeholder {
+  color: var(--text-muted) !important;
+}
+
+.el-input__prefix .el-icon,
+.el-input__suffix .el-icon {
+  color: var(--text-muted) !important;
+}
+
+.el-input__wrapper.is-focus .el-input__prefix .el-icon,
+.el-input__wrapper.is-focus .el-input__suffix .el-icon {
+  color: var(--accent-primary) !important;
+}
+
+.el-input .el-input__clear {
+  color: var(--text-muted) !important;
+}
+
+.el-input .el-input__clear:hover {
+  color: var(--accent-primary) !important;
+}
+
+/* --- InputNumber --- */
+.el-input-number {
+  width: 100%;
+}
+
+.el-input-number .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+
+.el-input-number .el-input-number__decrease,
+.el-input-number .el-input-number__increase {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: var(--glass-border) !important;
+  color: var(--text-secondary) !important;
+}
+
+.el-input-number .el-input-number__decrease:hover,
+.el-input-number .el-input-number__increase:hover {
+  background: rgba(0, 212, 255, 0.1) !important;
+  color: var(--accent-primary) !important;
+}
+
+/* --- Select --- */
+.el-select .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  padding: 4px 12px !important;
+  transition: all var(--transition-normal) !important;
+}
+
+.el-select .el-input__wrapper:hover {
+  border-color: rgba(0, 212, 255, 0.5) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.el-select .el-input__wrapper.is-focus {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 0 4px rgba(0, 212, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.el-select .el-input__inner {
+  color: var(--text-primary) !important;
+  font-weight: 500 !important;
+}
+
+.el-select .el-input__inner::placeholder {
+  color: var(--text-muted) !important;
+}
+
+.el-select .el-select__caret {
+  color: var(--text-muted) !important;
+}
+
+.el-select .el-select__caret.is-reverse {
+  color: var(--accent-primary) !important;
+}
+
+/* Select Dropdown (teleported to body) */
+.el-select-dropdown {
+  background: rgba(36, 36, 62, 0.98) !important;
+  border: 1px solid rgba(0, 212, 255, 0.3) !important;
+  border-radius: var(--radius-md) !important;
+  backdrop-filter: blur(30px) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5) !important;
+}
+
+.el-select-dropdown__item {
+  color: var(--text-secondary) !important;
+  padding: 12px 16px !important;
+  margin: 2px 6px !important;
+  border-radius: 10px !important;
+  transition: all var(--transition-normal) !important;
+}
+
+.el-select-dropdown__item:hover {
+  background: rgba(0, 212, 255, 0.15) !important;
+  color: var(--text-primary) !important;
+}
+
+.el-select-dropdown__item.selected {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(123, 44, 191, 0.2) 100%) !important;
+  color: var(--accent-primary) !important;
+  font-weight: 600 !important;
+}
+
+.el-select-dropdown__item.is-disabled {
+  color: var(--text-muted) !important;
+  opacity: 0.5;
+}
+
+.el-select-dropdown__empty {
+  color: var(--text-muted) !important;
+  padding: 24px 16px !important;
+}
+
+.el-select-group__title {
+  color: var(--accent-primary) !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 2px !important;
+  padding: 12px 16px 6px !important;
+  background: rgba(0, 212, 255, 0.05) !important;
+}
+
+.el-select-group__wrap:not(:first-of-type) {
+  padding-top: 0 !important;
+}
+
+.el-select-group__wrap:not(:last-of-type)::after {
+  display: none !important;
+}
+
+/* --- Switch --- */
+.el-switch {
+  --el-switch-on-color: #00d4ff;
+  --el-switch-off-color: rgba(255, 255, 255, 0.15);
+}
+
+.el-switch.is-checked .el-switch__core {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%) !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 10px rgba(0, 212, 255, 0.4) !important;
+}
+
+.el-switch__core {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 20px !important;
+  transition: all var(--transition-normal) !important;
+}
+
+.el-switch__action {
+  background: var(--text-primary) !important;
+}
+
+/* --- Slider --- */
+.el-slider__runway {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 4px !important;
+  height: 6px !important;
+}
+
+.el-slider__bar {
+  background: linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-secondary) 100%) !important;
+  border-radius: 4px !important;
+}
+
+.el-slider__button {
+  border-color: var(--accent-primary) !important;
+  background: var(--bg-tertiary) !important;
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.4) !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.el-slider__button:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 12px rgba(0, 212, 255, 0.6) !important;
+}
+
+.el-slider__stop {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+.el-slider__marks-text {
+  color: var(--text-muted) !important;
+  font-size: 11px !important;
+}
+
+/* Slider with show-input */
+.el-slider .el-input-number .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+/* --- Tag --- */
+.el-tag {
+  border-radius: var(--radius-sm) !important;
+  border: none !important;
+  font-weight: 500 !important;
+  padding: 4px 12px !important;
+}
+
+.el-tag--success {
+  background: linear-gradient(135deg, rgba(0, 245, 147, 0.2) 0%, rgba(0, 196, 133, 0.2) 100%) !important;
+  color: var(--accent-tertiary) !important;
+}
+
+.el-tag--warning {
+  background: rgba(255, 217, 61, 0.2) !important;
+  color: var(--accent-warning) !important;
+}
+
+.el-tag--danger {
+  background: rgba(255, 107, 107, 0.2) !important;
+  color: var(--accent-danger) !important;
+}
+
+.el-tag--info {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--text-secondary) !important;
+}
+
+.el-tag--primary {
+  background: rgba(0, 212, 255, 0.15) !important;
+  color: var(--accent-primary) !important;
+}
+
+/* --- Card --- */
+.el-card {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-card) !important;
+  color: var(--text-primary) !important;
+}
+
+.el-card__header {
+  border-bottom: 1px solid var(--glass-border) !important;
+  padding: var(--spacing-lg) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: var(--text-primary) !important;
+}
+
+.el-card__body {
+  color: var(--text-secondary) !important;
+}
+
+/* --- Table --- */
+.el-table {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+}
+
+.el-table th.el-table__cell {
+  background: rgba(255, 255, 255, 0.03) !important;
+  color: var(--text-secondary) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+
+.el-table td.el-table__cell {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell {
+  background: rgba(0, 212, 255, 0.05) !important;
+}
+
+.el-table__empty-text {
+  color: var(--text-muted) !important;
+}
+
+.el-table--border .el-table__cell {
+  border-color: var(--glass-border) !important;
+}
+
+.el-table__inner-wrapper::before {
+  background-color: var(--glass-border) !important;
+}
+
+/* --- Divider --- */
+.el-divider {
+  border-top-color: var(--glass-border) !important;
+}
+
+.el-divider__text {
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+}
+
+/* --- Collapse --- */
+.el-collapse {
+  border: none !important;
+  background: transparent !important;
+}
+
+.el-collapse-item__header {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-primary) !important;
+  font-size: 14px !important;
+  padding: 0 16px !important;
+  height: 44px !important;
+  line-height: 44px !important;
+  transition: all var(--transition-normal) !important;
+}
+
+.el-collapse-item__header:hover {
+  background: rgba(0, 212, 255, 0.06) !important;
+  border-color: rgba(0, 212, 255, 0.2) !important;
+}
+
+.el-collapse-item.is-active .el-collapse-item__header {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-color: rgba(0, 212, 255, 0.3) !important;
+  background: rgba(0, 212, 255, 0.08) !important;
+}
+
+.el-collapse-item__wrap {
+  background: transparent !important;
+  border: none !important;
+}
+
+.el-collapse-item__content {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-top: none !important;
+  border-radius: 0 0 var(--radius-md) var(--radius-md) !important;
+  padding: 16px !important;
+  color: var(--text-secondary) !important;
+}
+
+.el-collapse-item__arrow {
+  color: var(--text-muted) !important;
+}
+
+.el-collapse-item.is-active .el-collapse-item__arrow {
+  color: var(--accent-primary) !important;
+}
+
+/* --- Dropdown --- */
+.el-dropdown-menu {
+  background: rgba(36, 36, 62, 0.98) !important;
+  border: 1px solid rgba(0, 212, 255, 0.2) !important;
+  border-radius: var(--radius-md) !important;
+  backdrop-filter: blur(30px) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5) !important;
+  padding: 6px !important;
+}
+
+.el-dropdown-menu__item {
+  color: var(--text-secondary) !important;
+  border-radius: 10px !important;
+  padding: 10px 16px !important;
+  transition: all var(--transition-normal) !important;
+}
+
+.el-dropdown-menu__item:hover {
+  background: rgba(0, 212, 255, 0.12) !important;
+  color: var(--text-primary) !important;
+}
+
+.el-dropdown-menu__item--danger {
+  color: var(--accent-danger) !important;
+}
+
+.el-dropdown-menu__item--danger:hover {
+  background: rgba(255, 107, 107, 0.12) !important;
+  color: var(--accent-danger) !important;
+}
+
+.el-dropdown-menu__item--divided {
+  margin-top: 4px !important;
+}
+
+.el-dropdown-menu__item--divided::before {
+  background-color: var(--glass-border) !important;
+}
+
+/* --- Form --- */
+.el-form-item__label {
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+}
+
+.el-form-item__error {
+  color: var(--accent-danger) !important;
+}
+
+/* --- Message (Toast) --- */
+.el-message {
+  background: rgba(36, 36, 62, 0.95) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+.el-message .el-message__content {
+  color: var(--text-primary) !important;
+}
+
+.el-message--success .el-message__icon {
+  color: var(--accent-tertiary) !important;
+}
+
+.el-message--warning .el-message__icon {
+  color: var(--accent-warning) !important;
+}
+
+.el-message--error .el-message__icon {
+  color: var(--accent-danger) !important;
+}
+
+.el-message--info .el-message__icon {
+  color: var(--accent-primary) !important;
+}
+
+.el-message .el-message__closeBtn {
+  color: var(--text-muted) !important;
+}
+
+.el-message .el-message__closeBtn:hover {
+  color: var(--text-primary) !important;
+}
+
+/* --- MessageBox (Confirm Dialog) --- */
+.el-message-box {
+  background: rgba(36, 36, 62, 0.98) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-lg) !important;
+  backdrop-filter: blur(30px) !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5) !important;
+}
+
+.el-message-box__title {
+  color: var(--text-primary) !important;
+}
+
+.el-message-box__message {
+  color: var(--text-secondary) !important;
+}
+
+.el-message-box__header {
+  padding: 24px 24px 12px !important;
+}
+
+.el-message-box__content {
+  padding: 12px 24px !important;
+  color: var(--text-secondary) !important;
+}
+
+.el-message-box__btns {
+  padding: 12px 24px 24px !important;
+}
+
+.el-message-box__btns .el-button--primary {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%) !important;
+  border: none !important;
+}
+
+.el-message-box__btns .el-button--default {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid var(--glass-border) !important;
+  color: var(--text-primary) !important;
+}
+
+.el-message-box__status.el-icon {
+  display: none !important;
+}
+
+/* --- Overlay --- */
+.el-overlay {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* --- Popper (Tooltip / Popover base) --- */
+.el-popper.is-light {
+  background: rgba(36, 36, 62, 0.98) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+.el-popper.is-light .el-popper__arrow::before {
+  background: rgba(36, 36, 62, 0.98) !important;
+  border-color: var(--glass-border) !important;
+}
+
+/* --- Tooltip --- */
+.el-tooltip__trigger {
+  outline: none;
+}
+
+/* --- Container / Header / Main (reset Element Plus default backgrounds only) --- */
+.el-container {
+  background: transparent !important;
+}
+
+.el-header {
+  background: transparent !important;
+}
+
+.el-main {
+  background: transparent !important;
+}
+
+/* --- Loading --- */
+.el-loading-mask {
+  background-color: rgba(15, 12, 41, 0.8) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.el-loading-spinner .circular .path {
+  stroke: var(--accent-primary) !important;
+}
+
+.el-loading-spinner .el-loading-text {
+  color: var(--text-secondary) !important;
+}
+
+/* --- Empty --- */
+.el-empty__description p {
+  color: var(--text-muted) !important;
+}
+
+/* --- Dialog --- */
+.el-dialog {
+  background: rgba(36, 36, 62, 0.98) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-lg) !important;
+  backdrop-filter: blur(30px) !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5) !important;
+}
+
+.el-dialog__title {
+  color: var(--text-primary) !important;
+}
+
+.el-dialog__header {
+  border-bottom: 1px solid var(--glass-border) !important;
+  padding: 20px 24px !important;
+}
+
+.el-dialog__body {
+  color: var(--text-secondary) !important;
+  padding: 24px !important;
+}
+
+.el-dialog__footer {
+  border-top: 1px solid var(--glass-border) !important;
+  padding: 16px 24px !important;
+}
+
+.el-dialog__headerbtn .el-dialog__close {
+  color: var(--text-muted) !important;
+}
+
+.el-dialog__headerbtn:hover .el-dialog__close {
+  color: var(--accent-primary) !important;
+}
