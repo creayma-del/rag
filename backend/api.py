@@ -21,7 +21,7 @@ from src.vector_store import VectorStoreManager
 from src.qa_engine import QAEngine, RuntimeRegistry
 from src.trace_logger import log_pipeline, new_trace_id
 from src.chat_history import ChatHistoryManager, _validate_session_id
-from src.auth import init_auth, verify_password, create_token, require_auth, verify_token
+from src.auth import init_auth, verify_password, create_token, require_auth, verify_token, mask_value
 
 app = FastAPI(title="知识库 RAG API")
 
@@ -74,6 +74,7 @@ class QueryRequest(BaseModel):
 class ModelConfigRequest(BaseModel):
     model: str
     api_key: Optional[str] = None
+    secret_key: Optional[str] = None
 
 class SystemConfigRequest(BaseModel):
     chunk_size: Optional[int] = None
@@ -379,10 +380,21 @@ async def get_api_key_status():
         if "api_key_env" not in model_config:
             continue
         masked = Config.get_model_api_key_masked(model_name)
-        keys_status[model_name] = {
+        entry: dict = {
             "configured": bool(masked),
             "masked": masked,
         }
+        # 包含 secret_key 的模型（如文心一言），也返回 secret_key 的配置状态
+        secret_env_var = model_config.get("secret_key_env")
+        if secret_env_var:
+            secret_val = Config.get_env_value(secret_env_var)
+            secret_configured = bool(secret_val) and not secret_val.lower().startswith(Config._PLACEHOLDER_PREFIX)
+            entry["secret_configured"] = secret_configured
+            if secret_configured:
+                entry["secret_masked"] = mask_value(secret_val)
+            else:
+                entry["secret_masked"] = ""
+        keys_status[model_name] = entry
     return {"keys": keys_status}
 
 @app.post("/api/config")
@@ -395,6 +407,17 @@ async def update_config(request: ModelConfigRequest):
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         runtime_invalidated = get_runtime_registry().invalidate_llm(request.model)
+
+    # 处理 secret_key（如文心一言的 WENXIN_SECRET_KEY）
+    if request.secret_key is not None:
+        model_config = Config.get_model_config(request.model)
+        if model_config and "secret_key_env" in model_config:
+            secret_env_var = model_config["secret_key_env"]
+            cleaned = request.secret_key.strip()
+            os.environ[secret_env_var] = cleaned
+            setattr(Config, secret_env_var, cleaned)
+            Config._save_encrypted_keys()
+            runtime_invalidated = runtime_invalidated or get_runtime_registry().invalidate_llm(request.model)
 
     return {
         "status": "success",
@@ -434,9 +457,18 @@ async def upload_document(file: UploadFile = File(...)):
         safe_filename=safe_name,
         target_path=str(file_path),
     )
-    with open(file_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
+    try:
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+    except Exception:
+        # 写入失败时清理残留空文件
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except OSError:
+                pass
+        raise
     log_pipeline(
         trace_id,
         "document_build",
@@ -447,6 +479,9 @@ async def upload_document(file: UploadFile = File(...)):
         target_path=str(file_path),
     )
 
+    # 如果覆盖了已有文件，向量库的 content_hash 会自动变化，
+    # get_vector_store_status 会自动返回 stale=true，无需手动标记
+
     return {"status": "success", "filename": safe_name, "trace_id": trace_id}
 
 @app.delete("/api/documents/{filename:path}")
@@ -455,12 +490,17 @@ async def delete_document(filename: str):
     if file_path.exists():
         file_path.unlink()
         # 同步清理向量库中该文档的 chunks
+        vector_cleanup_warning = None
         try:
             vector_store_manager = VectorStoreManager()
             vector_store_manager.delete_document_from_vector_store(filename)
         except Exception as exc:
+            vector_cleanup_warning = f"向量库清理失败: {exc}"
             print(f"Warning: 清理向量库文档 chunks 失败 [{filename}]: {exc}")
-        return {"status": "success", "filename": filename}
+        result: dict = {"status": "success", "filename": filename}
+        if vector_cleanup_warning:
+            result["warning"] = vector_cleanup_warning
+        return result
     raise HTTPException(status_code=404, detail="Document not found")
 
 TEXT_PREVIEW_EXTENSIONS = {".txt", ".md", ".markdown", ".csv", ".json", ".html", ".htm", ".xml", ".yml", ".yaml"}

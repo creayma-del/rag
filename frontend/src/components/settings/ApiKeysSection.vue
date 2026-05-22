@@ -69,6 +69,7 @@
             show-password
             class="api-input"
             clearable
+            @update:model-value="$emit('update:api-key', model.name, $event)"
             @input="$emit('change')"
           />
         </div>
@@ -98,6 +99,7 @@ defineProps<{
 defineEmits<{
   'update:active-api-key': [value: string]
   'update:search-text': [value: string]
+  'update:api-key': [modelName: string, value: string]
   'change': []
 }>()
 

@@ -63,8 +63,8 @@ export function useSessions() {
     }
   }
 
-  async function loadSession(sessionId: string): Promise<Record<string, unknown> | null> {
-    if (sessionId === currentSessionId.value) return null
+  async function loadSession(sessionId: string, force: boolean = false): Promise<Record<string, unknown> | null> {
+    if (!force && sessionId === currentSessionId.value) return null
     try {
       const res = await api.getSession(sessionId)
       currentSessionId.value = sessionId

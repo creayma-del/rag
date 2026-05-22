@@ -168,6 +168,7 @@ class Config:
             "api_base": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions",
             "model": "completions",
             "api_key_env": "WENXIN_API_KEY",
+            "secret_key_env": "WENXIN_SECRET_KEY",
             "description": "百度文心一言（需配置 Secret Key）"
         },
         "local": {
@@ -261,40 +262,70 @@ class Config:
         try:
             with open(keys_path, "r", encoding="utf-8") as f:
                 encrypted_data = json.load(f)
-            for model_name, ciphertext in encrypted_data.items():
-                model_config = cls.get_model_config(model_name)
-                if not model_config or "api_key_env" not in model_config:
+            for key_name, ciphertext in encrypted_data.items():
+                # 处理 secret_key 后缀条目（如 "wenxin__secret"）
+                if key_name.endswith("__secret"):
+                    model_name = key_name[:-len("__secret")]
+                    model_config = cls.get_model_config(model_name)
+                    if not model_config:
+                        continue
+                    secret_env_var = model_config.get("secret_key_env")
+                    if not secret_env_var:
+                        continue
+                    if secret_env_var in os.environ and os.environ[secret_env_var] == "":
+                        continue
+                    try:
+                        raw_key = decrypt_api_key(ciphertext)
+                        os.environ[secret_env_var] = raw_key
+                        setattr(cls, secret_env_var, raw_key)
+                    except Exception:
+                        pass
                     continue
-                env_var = model_config["api_key_env"]
-                # 如果 os.environ 中已有空字符串，说明用户已清除该 Key，不恢复
-                if env_var in os.environ and os.environ[env_var] == "":
+                # 处理普通 api_key 条目
+                model_config = cls.get_model_config(key_name)
+                if not model_config:
                     continue
-                try:
-                    raw_key = decrypt_api_key(ciphertext)
-                    os.environ[env_var] = raw_key
-                    setattr(cls, env_var, raw_key)
-                except Exception:
-                    # 解密失败可能是 Fernet key 变更，跳过
-                    pass
+                env_var = model_config.get("api_key_env")
+                if env_var:
+                    if env_var in os.environ and os.environ[env_var] == "":
+                        continue
+                    try:
+                        raw_key = decrypt_api_key(ciphertext)
+                        os.environ[env_var] = raw_key
+                        setattr(cls, env_var, raw_key)
+                    except Exception:
+                        pass
         except (json.JSONDecodeError, OSError):
             pass
 
     @classmethod
     def _save_encrypted_keys(cls):
-        """加密保存当前所有已配置的 API Keys。"""
+        """加密保存当前所有已配置的 API Keys（含 secret_key_env）。"""
         try:
             from src.auth import encrypt_api_key
         except ImportError:
             return
         encrypted_data = {}
         for model_name in cls.MODEL_CONFIGS:
+            model_config = cls.get_model_config(model_name)
+            if not model_config:
+                continue
+            # 保存 api_key_env 对应的密钥
             raw_key = cls.get_model_api_key(model_name)
-            if not raw_key:
-                continue
-            try:
-                encrypted_data[model_name] = encrypt_api_key(raw_key)
-            except Exception:
-                continue
+            if raw_key:
+                try:
+                    encrypted_data[model_name] = encrypt_api_key(raw_key)
+                except Exception:
+                    continue
+            # 保存 secret_key_env 对应的密钥（如 WENXIN_SECRET_KEY）
+            secret_env_var = model_config.get("secret_key_env")
+            if secret_env_var:
+                secret_key = cls.get_env_value(secret_env_var)
+                if secret_key and not secret_key.lower().startswith(cls._PLACEHOLDER_PREFIX):
+                    try:
+                        encrypted_data[f"{model_name}__secret"] = encrypt_api_key(secret_key)
+                    except Exception:
+                        continue
         keys_path = cls._get_encrypted_keys_path()
         if not encrypted_data:
             # 所有 Key 都已清除，删除加密文件防止旧 Key 复活

@@ -40,6 +40,11 @@ export function useSettingsForm() {
     chunk_overlap: 50,
     embedding_model: '',
     reranker_model: '',
+    default_model: '',
+    max_tokens: 4096,
+    temperature: 0.1,
+    top_k: 5,
+    reranker_top_n: 3,
     vector_db_path: '',
     documents_path: '',
     supported_document_extensions: [],
@@ -115,9 +120,17 @@ export function useSettingsForm() {
       for (const model of cloudModels.value) {
         const key = apiKeys.value[model.name]
         if (key && key.trim()) {
-          await api.updateConfig({ model: model.name, api_key: key.trim() })
+          const payload: { model: string; api_key: string; secret_key?: string } = { model: model.name, api_key: key.trim() }
+          // 文心一言模型需要同时发送 secret_key
+          if (model.name === 'wenxin' && apiKeys.value['wenxin__secret']?.trim()) {
+            payload.secret_key = apiKeys.value['wenxin__secret'].trim()
+          }
+          await api.updateConfig(payload)
           saved = true
           apiKeys.value[model.name] = ''
+          if (model.name === 'wenxin') {
+            apiKeys.value['wenxin__secret'] = ''
+          }
         }
       }
 

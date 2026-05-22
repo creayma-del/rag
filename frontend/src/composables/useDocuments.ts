@@ -79,9 +79,14 @@ export function useDocuments() {
         cancelButtonText: '取消',
         type: 'warning',
       })
-      await api.deleteDocument(name)
+      const res = await api.deleteDocument(name)
       documents.value = documents.value.filter((d) => d.name !== name)
-      ElMessage.success(`已删除 "${name}"，向量库已同步更新`)
+      const data = res.data as { warning?: string }
+      if (data.warning) {
+        ElMessage.warning(`已删除 "${name}"，但${data.warning}，建议重新构建知识库`)
+      } else {
+        ElMessage.success(`已删除 "${name}"，向量库已同步更新`)
+      }
     } catch {
       // 取消
     }
@@ -166,6 +171,8 @@ export function useVectorStore() {
       ElMessage.success(`构建成功！处理了 ${res.data.documents_count} 个文档，${res.data.chunks_count} 个块`)
       vectorStoreExists.value = true
       vectorStoreStale.value = false
+      // 通知其他页面向量库状态已变更
+      window.dispatchEvent(new CustomEvent('vectorstore:changed', { detail: { exists: true, stale: false } }))
     } catch (e: unknown) {
       const err = e as { response?: { status?: number; data?: { detail?: string } } }
       if (err.response?.status === 409) {
@@ -174,6 +181,7 @@ export function useVectorStore() {
       }
       ElMessage.error(err.response?.data?.detail || '构建失败')
       vectorStoreStale.value = true
+      window.dispatchEvent(new CustomEvent('vectorstore:changed', { detail: { exists: vectorStoreExists.value, stale: true } }))
     } finally {
       building.value = false
     }

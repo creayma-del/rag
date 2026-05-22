@@ -246,6 +246,9 @@ const sessionOps = useSessions()
 // 共享 currentSessionId ref，确保 useChat 闭包和 sessionOps 操作的是同一个引用
 const chat = useChat(sessionOps.currentSessionId)
 
+// 将 messagesContainer ref 暴露到 setup 顶层，使模板 ref="messagesContainer" 能正确绑定
+const messagesContainer = chat.messagesContainer
+
 // ---- 移动端侧边栏 ----
 const showSessionSidebar = ref(false)
 const showSettingsSidebar = ref(false)
@@ -269,14 +272,14 @@ async function ensureSession(): Promise<void> {
   }
 }
 
-async function handleSelectSession(sessionId: string): Promise<void> {
+async function handleSelectSession(sessionId: string, force: boolean = false): Promise<void> {
   // 切换会话前先中止正在进行的流式请求，防止旧请求回调污染新会话消息
   if (chat.loading.value) {
     chat.stopStreaming()
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await chat.waitForStreamingStop()
   }
 
-  const data = await sessionOps.loadSession(sessionId)
+  const data = await sessionOps.loadSession(sessionId, force)
   if (data?.messages) {
     // 后端返回 snake_case 字段，前端使用 camelCase，需要显式映射
     const rawMessages = data.messages as Array<Record<string, unknown>>
@@ -322,6 +325,10 @@ onMounted(async () => {
   chat.checkVectorStore()
   // 必须等待会话列表加载完成，才能恢复 currentSessionId，避免 ensureSession 重复创建
   await sessionOps.loadSessions()
+  // 自动选中最近会话后，加载其历史消息
+  if (sessionOps.currentSessionId.value) {
+    await handleSelectSession(sessionOps.currentSessionId.value, true)
+  }
 })
 
 onBeforeUnmount(() => {

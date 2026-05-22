@@ -1,4 +1,4 @@
-import { ref, nextTick, type Ref } from 'vue'
+import { ref, nextTick, onMounted, onBeforeUnmount, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
 import { useSettingsStore } from '../stores/settings'
@@ -91,12 +91,34 @@ export function useChat(externalSessionId?: Ref<string | null>) {
   }
 
   // ---- 滚动 ----
+  let _scrollRafPending = false
   async function scrollToBottom(): Promise<void> {
-    await nextTick()
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    if (_scrollRafPending) return
+    _scrollRafPending = true
+    requestAnimationFrame(() => {
+      _scrollRafPending = false
+      if (messagesContainer.value) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      }
+    })
+  }
+
+  // ---- 向量库状态同步 ----
+  function handleVectorStoreChanged(event: Event): void {
+    const detail = (event as CustomEvent).detail as { exists: boolean; stale: boolean } | undefined
+    if (detail) {
+      vectorStoreExists.value = detail.exists
+      vectorStoreStale.value = detail.stale
     }
   }
+
+  onMounted(() => {
+    window.addEventListener('vectorstore:changed', handleVectorStoreChanged)
+  })
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('vectorstore:changed', handleVectorStoreChanged)
+  })
 
   function toggleRetrievalDetails(idx: number): void {
     messages.value[idx].showRetrievalDetails = !messages.value[idx].showRetrievalDetails
@@ -105,6 +127,18 @@ export function useChat(externalSessionId?: Ref<string | null>) {
   // ---- 通过 ID 查找消息索引 ----
   function findMsgIndexById(id: string): number {
     return messages.value.findIndex(m => m.id === id)
+  }
+
+  // ---- 等待流式请求真正停止 ----
+  async function waitForStreamingStop(): Promise<void> {
+    // 等待 abortController 被清空（在 sendStreamingMessage 的 finally 块中执行）
+    const maxWait = 2000
+    const interval = 50
+    let waited = 0
+    while (abortController.value !== null && waited < maxWait) {
+      await new Promise(resolve => setTimeout(resolve, interval))
+      waited += interval
+    }
   }
 
   // ---- 发送消息 ----
@@ -335,8 +369,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
     // 中止正在进行的流式请求，防止并发竞态
     if (loading.value) {
       stopStreaming()
-      // 等待 abort 完成，确保旧请求已停止
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await waitForStreamingStop()
     }
 
     await sessionOps.ensureSession()
@@ -380,7 +413,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
     // 中止正在进行的流式请求
     if (loading.value) {
       stopStreaming()
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await waitForStreamingStop()
     }
     // 移除旧 AI 消息，创建新的占位消息（ID 在 sendStreamingMessage 中使用）
     messages.value.splice(msgIdx, 1)
@@ -476,6 +509,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
     getSelectedModelInfo, scrollToBottom, toggleRetrievalDetails,
     sendMessage, sendNormalMessage, sendStreamingMessage, sendMessageInternal,
     regenerateMessage, stopStreaming, regenerateInterrupted, copyMessage,
+    waitForStreamingStop,
   }
 }
 

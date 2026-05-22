@@ -33,7 +33,7 @@ def build(path):
 @cli.command()
 @click.option('--query', prompt='请输入查询问题', help='要查询的问题')
 @click.option('--model', default=Config.DEFAULT_MODEL, 
-              type=click.Choice(['openai', 'qwen', 'zhipu', 'kimi', 'doubao', 'local', 'local-small', 'local-medium', 'local-large', 'local-huge']),
+              type=click.Choice(['openai', 'qwen', 'zhipu', 'kimi', 'deepseek', 'siliconflow', 'groq', 'mistral', 'baichuan', 'stepfun', 'wenxin', 'local', 'local-small', 'local-medium', 'local-large', 'local-huge']),
               help='选择大模型')
 def query(query, model):
     vector_store_manager = VectorStoreManager()
@@ -53,7 +53,7 @@ def query(query, model):
 
 @cli.command()
 @click.option('--model', default=Config.DEFAULT_MODEL, 
-              type=click.Choice(['openai', 'qwen', 'zhipu', 'kimi', 'doubao', 'local', 'local-small', 'local-medium', 'local-large', 'local-huge']),
+              type=click.Choice(['openai', 'qwen', 'zhipu', 'kimi', 'deepseek', 'siliconflow', 'groq', 'mistral', 'baichuan', 'stepfun', 'wenxin', 'local', 'local-small', 'local-medium', 'local-large', 'local-huge']),
               help='选择大模型')
 def chat(model):
     vector_store_manager = VectorStoreManager()

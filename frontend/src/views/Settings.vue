@@ -30,6 +30,7 @@
         :search-text="apiKeySearch"
         @update:active-api-key="activeApiKey = $event"
         @update:search-text="apiKeySearch = $event"
+        @update:api-key="apiKeys[$event[0]] = $event[1]"
         @change="markDirty"
       />
       <SystemInfoSection :system-config="systemConfig" />

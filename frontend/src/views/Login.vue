@@ -88,6 +88,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { WarningFilled } from '@element-plus/icons-vue'
 import { setToken, isAuthenticated } from '../api'
+import api from '../api'
 
 const router = useRouter()
 const route = useRoute()
@@ -110,30 +111,19 @@ async function handleLogin(): Promise<void> {
   errorMsg.value = ''
 
   try {
-    // 使用 fetch 直接调用（此时还没有 token）
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: password.value }),
-    })
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({ detail: '登录失败' }))
-      if (response.status === 429) {
-        errorMsg.value = errData.detail || '登录尝试过于频繁，请稍后再试'
-      } else {
-        errorMsg.value = errData.detail || '登录失败'
-      }
-      return
-    }
-
-    const data = await response.json()
+    const res = await api.login(password.value)
+    const data = res.data
     setToken(data.token)
     ElMessage.success('登录成功')
     const redirect = (route.query.redirect as string) || '/chat'
     router.replace(redirect)
-  } catch {
-    errorMsg.value = '网络错误，请检查后端服务是否启动'
+  } catch (e: unknown) {
+    const err = e as { response?: { status?: number; data?: { detail?: string } }; message?: string }
+    if (err.response?.status === 429) {
+      errorMsg.value = err.response.data?.detail || '登录尝试过于频繁，请稍后再试'
+    } else {
+      errorMsg.value = err.response?.data?.detail || err.message || '登录失败'
+    }
   } finally {
     loading.value = false
   }

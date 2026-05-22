@@ -47,6 +47,11 @@ export function isAuthenticated(): boolean {
   return true
 }
 
+// 命名导出 verifyAuth，供路由守卫等服务端验证场景使用
+export async function verifyAuth(): Promise<void> {
+  await api.get('/auth/verify')
+}
+
 // ---- Axios 实例 ----
 
 const api = axios.create({
@@ -104,9 +109,21 @@ export interface SystemConfig {
   chunk_overlap: number
   embedding_model: string
   reranker_model: string
+  default_model: string
+  max_tokens: number
+  temperature: number
+  top_k: number
+  reranker_top_n: number
   vector_db_path: string
   documents_path: string
   supported_document_extensions: string[]
+}
+
+export interface SystemConfigRequest {
+  chunk_size?: number
+  chunk_overlap?: number
+  embedding_model?: string
+  reranker_model?: string
 }
 
 export interface QueryParams {
@@ -147,8 +164,7 @@ export default {
     api.get('/preload/status', { params: { model } }),
   getModels: () => api.get('/models'),
   getConfig: () => api.get('/config'),
-  updateConfig: (data: { model: string; api_key: string }) =>
-    api.post('/config', data),
+  updateConfig: (data: { model: string; api_key: string; secret_key?: string }) => api.post('/config', data),
   getApiKeyStatus: () =>
     api.get('/config/keys'),
 
@@ -209,6 +225,5 @@ export default {
 
   // 系统配置 API
   getSystemConfig: () => api.get('/config/system'),
-  updateSystemConfig: (data: Partial<SystemConfig>) =>
-    api.post('/config/system', data),
+  updateSystemConfig: (data: SystemConfigRequest) => api.post('/config/system', data),
 }
