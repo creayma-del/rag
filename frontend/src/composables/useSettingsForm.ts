@@ -39,6 +39,7 @@ export function useSettingsForm() {
     chunk_size: 500,
     chunk_overlap: 50,
     embedding_model: '',
+    embedding_dimension: null,
     reranker_model: '',
     default_model: '',
     max_tokens: 4096,

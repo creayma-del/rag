@@ -4,6 +4,7 @@ import time
 from typing import Dict, Generator
 
 import requests
+from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from sentence_transformers import CrossEncoder
@@ -456,8 +457,10 @@ class QAEngine:
         use_reranker=False,
         reranker_top_n=None,
         runtime_registry=None,
+        embeddings=None,
     ):
         self.vector_store = vector_store
+        self.embeddings = embeddings
         self.model_name = model_name if model_name is not None else Config.DEFAULT_MODEL
         self.temperature = temperature if temperature is not None else Config.TEMPERATURE
         self.max_tokens = max_tokens if max_tokens is not None else Config.MAX_TOKENS
@@ -551,18 +554,52 @@ class QAEngine:
             top_k=self.top_k,
             model=self.model_name,
         )
-        docs_with_scores = self.vector_store.similarity_search_with_score(question, k=self.top_k)
+
+        # ── Query Encoder：独立步骤，显式将用户查询向量化 ──
+        if self.embeddings is None:
+            raise ValueError("Embeddings 模型未加载，无法执行查询向量化")
+        query_vector = self.embeddings.embed_query(question)
+        self._log(
+            "query_encoding_complete",
+            "查询向量化完成（Query Encoder 独立步骤）",
+            question=question,
+            query_vector_dimension=len(query_vector),
+            embedding_model=Config.EMBEDDING_MODEL,
+        )
+
+        # ── Retriever：使用预计算的查询向量进行相似度检索 ──
+        # 使用 cosine 距离时，返回的 distance = 1 - cosine_similarity
+        results = self.vector_store._collection.query(
+            query_embeddings=[query_vector],
+            n_results=self.top_k,
+            include=["documents", "metadatas", "distances"],
+        )
+
+        # 从 Chroma 原始结果重建 (Document, distance) 列表
+        docs_with_scores = []
+        if results and results.get("ids") and results["ids"][0]:
+            for i in range(len(results["ids"][0])):
+                content = (results["documents"][0][i]
+                           if results.get("documents") and results["documents"][0] else "")
+                metadata = (results["metadatas"][0][i]
+                            if results.get("metadatas") and results["metadatas"][0] else {})
+                distance = (results["distances"][0][i]
+                            if results.get("distances") and results["distances"][0] else 0.0)
+                doc = Document(page_content=content, metadata=metadata)
+                docs_with_scores.append((doc, distance))
+
         docs = [doc for doc, _ in docs_with_scores]
 
         retrieval_info = [
             {
                 "index": idx,
                 "source": doc.metadata.get("source", "unknown"),
-                "score": round(max(0.0, 1.0 - float(score)), 4),
+                # cosine 距离下：cosine_similarity = 1 - cosine_distance
+                "score": round(1.0 - float(distance), 4),
                 "content_preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
                 "content": doc.page_content,
             }
-            for idx, (doc, score) in enumerate(docs_with_scores)
+            for idx, (doc, distance) in enumerate(docs_with_scores)
         ]
 
         self._log(
@@ -671,6 +708,21 @@ class QAEngine:
         }
 
     def get_context(self, question):
-        docs = self.vector_store.similarity_search(question, k=self.top_k)
+        if self.embeddings is None:
+            raise ValueError("Embeddings 模型未加载，无法执行查询向量化")
+        query_vector = self.embeddings.embed_query(question)
+        results = self.vector_store._collection.query(
+            query_embeddings=[query_vector],
+            n_results=self.top_k,
+            include=["documents", "metadatas"],
+        )
+        docs = []
+        if results and results.get("ids") and results["ids"][0]:
+            for i in range(len(results["ids"][0])):
+                content = (results["documents"][0][i]
+                           if results.get("documents") and results["documents"][0] else "")
+                metadata = (results["metadatas"][0][i]
+                            if results.get("metadatas") and results["metadatas"][0] else {})
+                docs.append(Document(page_content=content, metadata=metadata))
         return docs
 

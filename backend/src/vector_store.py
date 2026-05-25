@@ -14,13 +14,15 @@ from src.trace_logger import log_pipeline
 class VectorStoreManager:
     _instance = None
     _embeddings = None
-    
+    _embedding_dimension = None
+    _COSINE_METADATA = {"hnsw:space": "cosine"}
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         if self._initialized:
             return
@@ -43,7 +45,10 @@ class VectorStoreManager:
                 model_name=Config.EMBEDDING_MODEL,
                 model_kwargs={"device": "cpu"}
             )
-            print("✅ Embeddings 模型加载完成")
+            # 计算向量维度：嵌入一段测试文本，取结果向量长度
+            _test_vector = VectorStoreManager._embeddings.embed_query("dimension_probe")
+            VectorStoreManager._embedding_dimension = len(_test_vector)
+            print(f"✅ Embeddings 模型加载完成，向量维度: {VectorStoreManager._embedding_dimension}")
             if trace_id:
                 log_pipeline(
                     trace_id,
@@ -51,8 +56,21 @@ class VectorStoreManager:
                     "embedding_load_complete",
                     "Embeddings 模型加载完成",
                     embedding_model=Config.EMBEDDING_MODEL,
+                    embedding_dimension=VectorStoreManager._embedding_dimension,
                 )
         self.embeddings = VectorStoreManager._embeddings
+
+    def get_embedding_dimension(self):
+        """获取当前 Embedding 模型的向量维度。"""
+        if VectorStoreManager._embedding_dimension is not None:
+            return VectorStoreManager._embedding_dimension
+        if self.embeddings is None:
+            self._load_embeddings()
+        # 兜底：模型已加载但维度未计算（热更新场景）
+        if VectorStoreManager._embedding_dimension is None and self.embeddings is not None:
+            _test_vector = self.embeddings.embed_query("dimension_probe")
+            VectorStoreManager._embedding_dimension = len(_test_vector)
+        return VectorStoreManager._embedding_dimension
 
     def _vector_store_root(self):
         return Path(Config.VECTOR_DB_PATH)
@@ -130,7 +148,10 @@ class VectorStoreManager:
     def _write_index_state(self, document_snapshot):
         state_path = self._index_state_path()
         state_path.parent.mkdir(parents=True, exist_ok=True)
-        content = json.dumps({"documents": document_snapshot}, ensure_ascii=False, indent=2)
+        content = json.dumps({
+            "distance_function": "cosine",
+            "documents": document_snapshot,
+        }, ensure_ascii=False, indent=2)
         # 原子写入：先写临时文件，再 rename，防止崩溃时数据丢失
         tmp_fd, tmp_path = tempfile.mkstemp(
             dir=state_path.parent, suffix='.tmp', prefix='.index_state_'
@@ -152,7 +173,11 @@ class VectorStoreManager:
             return None
 
         try:
-            return json.loads(state_path.read_text(encoding="utf-8"))
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+            # 兼容旧格式：纯列表（无 distance_function 字段）视为 L2
+            if isinstance(data, list):
+                return {"distance_function": "l2", "documents": data}
+            return data
         except json.JSONDecodeError:
             return None
 
@@ -195,11 +220,18 @@ class VectorStoreManager:
         current_hashes = {d["name"]: d.get("content_hash") for d in current_snapshot}
         is_current = has_index_files and indexed_hashes == current_hashes
 
+        # 检测距离函数兼容性：旧索引使用 L2，当前版本要求 cosine
+        distance_function = state.get("distance_function", "l2") if state else None
+        needs_distance_migration = has_index_files and distance_function != "cosine"
+
         return {
             "exists": has_index_files,
-            "current": is_current,
-            "stale": has_index_files and not is_current,
+            "current": is_current and not needs_distance_migration,
+            "stale": has_index_files and (not is_current or needs_distance_migration),
             "documents_count": len(current_snapshot),
+            "distance_function": distance_function,
+            "needs_distance_migration": needs_distance_migration,
+            "embedding_dimension": VectorStoreManager._embedding_dimension,
         }
     
     def create_vector_store(self, documents, document_snapshot=None, trace_id=None, chain="document_build"):
@@ -244,6 +276,7 @@ class VectorStoreManager:
                 existing_store = Chroma(
                     persist_directory=Config.VECTOR_DB_PATH,
                     embedding_function=self.embeddings,
+                    collection_metadata=self._COSINE_METADATA,
                 )
                 existing_store.add_documents(new_only_docs)
             self._write_index_state(snapshot)
@@ -320,7 +353,8 @@ class VectorStoreManager:
             self.vector_store = Chroma.from_documents(
                 documents=documents,
                 embedding=self.embeddings,
-                persist_directory=Config.VECTOR_DB_PATH
+                persist_directory=Config.VECTOR_DB_PATH,
+                collection_metadata=self._COSINE_METADATA,
             )
             self._write_index_state(snapshot)
             # 新库构建成功，删除备份
@@ -378,7 +412,8 @@ class VectorStoreManager:
         self._reset_chroma_system_cache()
         store = Chroma(
             persist_directory=Config.VECTOR_DB_PATH,
-            embedding_function=self.embeddings
+            embedding_function=self.embeddings,
+            collection_metadata=self._COSINE_METADATA,
         )
 
         if trace_id:
@@ -454,7 +489,8 @@ class VectorStoreManager:
             self._reset_chroma_system_cache()
             self.vector_store = Chroma(
                 persist_directory=Config.VECTOR_DB_PATH,
-                embedding_function=self.embeddings
+                embedding_function=self.embeddings,
+                collection_metadata=self._COSINE_METADATA,
             )
             if trace_id:
                 log_pipeline(

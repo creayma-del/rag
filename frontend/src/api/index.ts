@@ -108,6 +108,7 @@ export interface SystemConfig {
   chunk_size: number
   chunk_overlap: number
   embedding_model: string
+  embedding_dimension: number | null
   reranker_model: string
   default_model: string
   max_tokens: number

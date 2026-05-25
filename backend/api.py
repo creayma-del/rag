@@ -658,6 +658,9 @@ async def vectorstore_status():
         "indexed": status["exists"],
         "stale": status["stale"],
         "documents_count": status["documents_count"],
+        "distance_function": status.get("distance_function"),
+        "needs_distance_migration": status.get("needs_distance_migration", False),
+        "embedding_dimension": status.get("embedding_dimension"),
     }
 
 @app.post("/api/query")
@@ -716,6 +719,7 @@ async def query(request: QueryRequest):
                 use_reranker=request.use_reranker,
                 reranker_top_n=request.reranker_top_n,
                 runtime_registry=runtime_registry,
+                embeddings=vector_store_manager.embeddings,
             )
             qa_engine.set_trace(trace_id, "query")
             print(f"🤖 正在使用 {request.model} 生成回答...")
@@ -886,6 +890,7 @@ async def get_system_config():
         "chunk_size": Config.CHUNK_SIZE,
         "chunk_overlap": Config.CHUNK_OVERLAP,
         "embedding_model": Config.EMBEDDING_MODEL,
+        "embedding_dimension": VectorStoreManager._embedding_dimension,
         "reranker_model": Config.RERANKER_MODEL,
         "default_model": Config.DEFAULT_MODEL,
         "max_tokens": Config.MAX_TOKENS,
@@ -913,6 +918,7 @@ async def update_system_config(request: SystemConfigRequest):
         # embedding 模型变更时，清除缓存并标记向量库失效
         if request.embedding_model != old_model:
             VectorStoreManager._embeddings = None
+            VectorStoreManager._embedding_dimension = None
             # 标记向量库为 stale（删除索引状态文件，使 get_vector_store_status 返回 stale=True）
             vs_manager = VectorStoreManager()
             index_state_path = vs_manager._index_state_path()
@@ -982,6 +988,7 @@ async def query_stream(
                 use_reranker=use_reranker,
                 reranker_top_n=reranker_top_n,
                 runtime_registry=runtime_registry,
+                embeddings=vector_store_manager.embeddings,
             )
             qa_engine.set_trace(trace_id, "query_stream")
 
