@@ -546,7 +546,13 @@ class QAEngine:
         return "\n".join(lines)
 
     def _retrieve_and_assemble_prompt(self, question, chat_history=None):
-        """检索 + 重排 + 拼装 prompt，get_answer 和 stream_answer 共用。"""
+        """检索 + 重排 + 拼装 prompt，get_answer 和 stream_answer 共用。
+        返回 (prompt, retrieval_info, rerank_info, pipeline_stages)。"""
+        import time as _time
+        pipeline_stages = []
+
+        # ── 阶段 1: Query Encoder 查询编码 ──
+        t0 = _time.time()
         self._log(
             "retrieval_start",
             "开始向量检索",
@@ -555,10 +561,10 @@ class QAEngine:
             model=self.model_name,
         )
 
-        # ── Query Encoder：独立步骤，显式将用户查询向量化 ──
         if self.embeddings is None:
             raise ValueError("Embeddings 模型未加载，无法执行查询向量化")
         query_vector = self.embeddings.embed_query(question)
+        query_encode_ms = round((_time.time() - t0) * 1000, 1)
         self._log(
             "query_encoding_complete",
             "查询向量化完成（Query Encoder 独立步骤）",
@@ -566,16 +572,26 @@ class QAEngine:
             query_vector_dimension=len(query_vector),
             embedding_model=Config.EMBEDDING_MODEL,
         )
+        pipeline_stages.append({
+            "name": "query_encoding",
+            "label": "Query Encoder 查询编码",
+            "description": "将用户问题通过 Embedding 模型转换为向量表示",
+            "input": {"question": question},
+            "output": {
+                "query_vector_dimension": len(query_vector),
+                "embedding_model": Config.EMBEDDING_MODEL,
+            },
+            "duration_ms": query_encode_ms,
+        })
 
-        # ── Retriever：使用预计算的查询向量进行相似度检索 ──
-        # 使用 cosine 距离时，返回的 distance = 1 - cosine_similarity
+        # ── 阶段 2: Retriever 向量检索 ──
+        t0 = _time.time()
         results = self.vector_store._collection.query(
             query_embeddings=[query_vector],
             n_results=self.top_k,
             include=["documents", "metadatas", "distances"],
         )
 
-        # 从 Chroma 原始结果重建 (Document, distance) 列表
         docs_with_scores = []
         if results and results.get("ids") and results["ids"][0]:
             for i in range(len(results["ids"][0])):
@@ -594,13 +610,13 @@ class QAEngine:
             {
                 "index": idx,
                 "source": doc.metadata.get("source", "unknown"),
-                # cosine 距离下：cosine_similarity = 1 - cosine_distance
                 "score": round(1.0 - float(distance), 4),
                 "content_preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
                 "content": doc.page_content,
             }
             for idx, (doc, distance) in enumerate(docs_with_scores)
         ]
+        retrieval_ms = round((_time.time() - t0) * 1000, 1)
 
         self._log(
             "retrieval_complete",
@@ -609,14 +625,43 @@ class QAEngine:
             retrieved_documents=len(docs),
             sources=[doc.metadata.get("source") for doc in docs],
         )
+        pipeline_stages.append({
+            "name": "retrieval",
+            "label": "Retriever 向量检索",
+            "description": "使用查询向量在向量库中进行相似度检索，返回 Top-K 相关文档片段",
+            "input": {"top_k": self.top_k, "distance_function": "cosine"},
+            "output": {
+                "retrieved_count": len(docs),
+                "sources": [doc.metadata.get("source") for doc in docs],
+                "scores": [round(1.0 - float(d), 4) for _, d in docs_with_scores],
+            },
+            "duration_ms": retrieval_ms,
+        })
 
+        # ── 阶段 3: Reranker 重排序（可选） ──
         rerank_info = []
         if self.use_reranker and docs:
+            t0 = _time.time()
             docs, rerank_info = self._rerank_documents(question, docs)
+            rerank_ms = round((_time.time() - t0) * 1000, 1)
+            pipeline_stages.append({
+                "name": "reranking",
+                "label": "Reranker 重排序",
+                "description": "使用 CrossEncoder 对检索结果进行精排，提升文档相关性",
+                "input": {"documents_count": len(retrieval_info), "reranker_top_n": self.reranker_top_n},
+                "output": {
+                    "reranked_count": len(rerank_info),
+                    "top_scores": [r["score"] for r in rerank_info[:3]],
+                },
+                "duration_ms": rerank_ms,
+            })
 
+        # ── 阶段 4: Prompt Builder 提示构建 ──
+        t0 = _time.time()
         context = "\n\n".join([doc.page_content for doc in docs])
         history_text = self._format_history(chat_history)
         prompt = self.prompt_template.format(context=context, question=question, history=history_text)
+        prompt_ms = round((_time.time() - t0) * 1000, 1)
         self._log(
             "prompt_assemble_complete",
             "提示词拼装完成",
@@ -624,11 +669,27 @@ class QAEngine:
             context_characters=len(context),
             prompt_characters=len(prompt),
         )
+        pipeline_stages.append({
+            "name": "prompt_building",
+            "label": "Prompt Builder 提示构建",
+            "description": "将检索到的文档片段、对话历史和用户问题组装为结构化 Prompt",
+            "input": {
+                "context_documents": len(docs),
+                "has_history": bool(chat_history),
+            },
+            "output": {
+                "context_characters": len(context),
+                "prompt_characters": len(prompt),
+                "prompt_template": self.prompt_template.template,
+            },
+            "duration_ms": prompt_ms,
+        })
 
-        return prompt, retrieval_info, rerank_info
+        return prompt, retrieval_info, rerank_info, pipeline_stages
 
     def get_answer(self, question, chat_history=None):
-        prompt, retrieval_info, rerank_info = self._retrieve_and_assemble_prompt(question, chat_history)
+        import time as _time
+        prompt, retrieval_info, rerank_info, pipeline_stages = self._retrieve_and_assemble_prompt(question, chat_history)
 
         llm_runtime = self.runtime_registry.get_llm(self.model_name)
         self._log(
@@ -639,12 +700,14 @@ class QAEngine:
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
+        t0 = _time.time()
         answer = llm_runtime.invoke(
             prompt,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             chat_history=chat_history,
         )
+        llm_ms = round((_time.time() - t0) * 1000, 1)
 
         if "答案：" in answer:
             answer = answer.split("答案：", 1)[1].strip()
@@ -654,16 +717,35 @@ class QAEngine:
             "LLM 回答生成完成",
             answer_characters=len(answer),
         )
+
+        # ── 阶段 5: LLM 答案生成 ──
+        pipeline_stages.append({
+            "name": "llm_generation",
+            "label": "LLM 答案生成",
+            "description": "将结构化 Prompt 发送给大语言模型，生成最终答案",
+            "input": {
+                "model": self.model_name,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+                "prompt_characters": len(prompt),
+            },
+            "output": {
+                "answer_characters": len(answer),
+            },
+            "duration_ms": llm_ms,
+        })
         
         return {
             "answer": answer,
             "retrieval_info": retrieval_info,
             "rerank_info": rerank_info,
-            "used_reranker": self.use_reranker
+            "used_reranker": self.use_reranker,
+            "pipeline_stages": pipeline_stages,
         }
 
     def stream_answer(self, question, chat_history=None) -> Generator[str, None, Dict]:
-        prompt, retrieval_info, rerank_info = self._retrieve_and_assemble_prompt(question, chat_history)
+        import time as _time
+        prompt, retrieval_info, rerank_info, pipeline_stages = self._retrieve_and_assemble_prompt(question, chat_history)
 
         llm_runtime = self.runtime_registry.get_llm(self.model_name)
         
@@ -699,12 +781,30 @@ class QAEngine:
         
         if "答案：" in full_answer:
             full_answer = full_answer.split("答案：", 1)[1].strip()
-        
+
+        # ── 阶段 5: LLM 答案生成 ──
+        pipeline_stages.append({
+            "name": "llm_generation",
+            "label": "LLM 答案生成",
+            "description": "将结构化 Prompt 发送给大语言模型，生成最终答案",
+            "input": {
+                "model": self.model_name,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+                "prompt_characters": len(prompt),
+            },
+            "output": {
+                "answer_characters": len(full_answer),
+            },
+            "duration_ms": None,  # 流式无法精确计时
+        })
+
         yield {
             "answer": full_answer,
             "retrieval_info": retrieval_info,
             "rerank_info": rerank_info,
-            "used_reranker": self.use_reranker
+            "used_reranker": self.use_reranker,
+            "pipeline_stages": pipeline_stages,
         }
 
     def get_context(self, question):

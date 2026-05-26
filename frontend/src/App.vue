@@ -49,11 +49,12 @@
         </div>
         
         <nav class="nav-menu">
-          <router-link 
-            v-for="item in navItems" 
+          <router-link
+            v-for="item in navItems"
             :key="item.path"
-            :to="item.path" 
-            :class="['nav-item', { active: $route.path === item.path }]"
+            :to="item.path"
+            :class="['nav-item', { active: $route.path === item.path, disabled: isLoading }]"
+            @click.prevent="handleNavClick(item.path)"
           >
             <component
               :is="item.icon"
@@ -67,31 +68,6 @@
           <div class="header-decoration">
             <div class="glow-dot" />
           </div>
-          <el-button
-            class="logout-btn"
-            title="退出登录"
-            @click="handleLogout"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              style="width:16px;height:16px"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line
-                x1="21"
-                y1="12"
-                x2="9"
-                y2="12"
-              />
-            </svg>
-            <span>退出</span>
-          </el-button>
         </div>
       </div>
     </el-header>
@@ -114,9 +90,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChatDotRound, Document, Setting } from '@element-plus/icons-vue'
+import { ChatDotRound, Document, Setting, DataAnalysis } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { requestTracker } from './api'
 import ErrorBoundary from './components/ErrorBoundary.vue'
-import { clearToken } from './api'
 
 interface NavItem {
   path: string
@@ -124,17 +101,26 @@ interface NavItem {
   icon: typeof ChatDotRound
 }
 
+const router = useRouter()
+
 const navItems = computed<NavItem[]>(() => [
   { path: '/chat', label: '智能对话', icon: ChatDotRound },
   { path: '/documents', label: '文档管理', icon: Document },
+  { path: '/pipeline', label: 'RAG 管道', icon: DataAnalysis },
   { path: '/settings', label: '系统设置', icon: Setting },
 ])
 
-const router = useRouter()
+const isLoading = computed(() => requestTracker.pendingCount > 0)
 
-function handleLogout(): void {
-  clearToken()
-  router.replace('/login')
+function handleNavClick(path: string) {
+  if (isLoading.value) {
+    ElMessage.warning({
+      message: '数据加载中，请稍后再切换页面',
+      duration: 2000,
+    })
+    return
+  }
+  router.push(path)
 }
 </script>
 
@@ -243,6 +229,12 @@ function handleLogout(): void {
   box-shadow: 0 2px 12px rgba(0, 212, 255, 0.15);
 }
 
+.nav-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .nav-icon {
   width: 18px;
   height: 18px;
@@ -257,26 +249,6 @@ function handleLogout(): void {
 .header-decoration {
   display: flex;
   align-items: center;
-}
-
-.logout-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted) !important;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all var(--transition-normal);
-}
-
-.logout-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary) !important;
-  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .glow-dot {
@@ -295,7 +267,7 @@ function handleLogout(): void {
 
 .app-main {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
   padding: 24px 32px;
   max-width: 1400px;
   width: 100%;
@@ -334,10 +306,6 @@ function handleLogout(): void {
   
   .nav-item {
     padding: 10px 14px;
-  }
-  
-  .logout-btn span {
-    display: none;
   }
   
   .app-main {

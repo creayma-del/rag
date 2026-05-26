@@ -42,6 +42,18 @@ async def build_vectorstore():
         )
         doc_loader = DocumentLoader(trace_id=trace_id, chain="document_build")
         vector_store_manager = VectorStoreManager()
+        # 确保 embeddings 模型已加载，用于语义分块
+        vector_store_manager._load_embeddings(trace_id=trace_id, chain="document_build")
+        doc_loader.embeddings = vector_store_manager.embeddings
+        if doc_loader.chunk_strategy == "semantic" and doc_loader.embeddings is not None:
+            from langchain_experimental.text_splitter import SemanticChunker
+            doc_loader.semantic_splitter = SemanticChunker(
+                embeddings=doc_loader.embeddings,
+                breakpoint_threshold_type=Config.SEMANTIC_BREAKPOINT_TYPE,
+                breakpoint_threshold_amount=Config.SEMANTIC_BREAKPOINT_AMOUNT,
+                min_chunk_size=Config.SEMANTIC_MIN_CHUNK_SIZE,
+                sentence_split_regex=r"(?<=[。！？；\.\!\?;])\s*",
+            )
         documents_root = get_documents_root()
         log_pipeline(
             trace_id,
@@ -141,8 +153,11 @@ async def vectorstore_status():
         "exists": status["current"],
         "indexed": status["exists"],
         "stale": status["stale"],
-        "documents_count": status["documents_count"],
+        "documents_count": status["indexed_documents_count"],
         "distance_function": status.get("distance_function"),
         "needs_distance_migration": status.get("needs_distance_migration", False),
+        "needs_embedding_rebuild": status.get("needs_embedding_rebuild", False),
+        "needs_chunk_strategy_rebuild": status.get("needs_chunk_strategy_rebuild", False),
         "embedding_dimension": status.get("embedding_dimension"),
+        "chunk_strategy": Config.CHUNK_STRATEGY,
     }

@@ -215,7 +215,7 @@
         :use-streaming="chat.useStreaming.value"
         :quick-tips="chat.quickTips.value"
         @update:selected-model="(v) => settings.selectedModel = v"
-        @update:use-reranker="(v) => settings.useReranker = v"
+        @update:use-reranker="handleUseRerankerChange"
         @update:reranker-top-n="(v) => settings.rerankerTopN = v"
         @update:temperature="(v) => settings.temperature = v"
         @update:max-tokens="(v) => settings.maxTokens = v"
@@ -234,6 +234,7 @@ import { ChatDotRound, Operation } from '@element-plus/icons-vue'
 import { useSettingsStore } from '../stores/settings'
 import { useChat } from '../composables/useChat'
 import { useSessions } from '../composables/useSessions'
+import api from '../api'
 import type { ChatMessage as ChatMessageType } from '../types/chat'
 import SessionSidebar from '../components/chat/SessionSidebar.vue'
 import SettingsSidebar from '../components/chat/SettingsSidebar.vue'
@@ -256,6 +257,14 @@ const showSettingsSidebar = ref(false)
 function closeMobileSidebars(): void {
   showSessionSidebar.value = false
   showSettingsSidebar.value = false
+}
+
+function handleUseRerankerChange(value: boolean): void {
+  settings.useReranker = value
+  // 同步到后端 Config.USE_RERANKER
+  api.updateSystemConfig({ use_reranker: value }).catch(() => {
+    // 非关键操作，静默失败
+  })
 }
 
 // ---- 会话操作 ----
@@ -289,6 +298,7 @@ async function handleSelectSession(sessionId: string, force: boolean = false): P
       content: m.content as string,
       retrievalInfo: (m.retrieval_info ?? m.retrievalInfo ?? []) as ChatMessageType['retrievalInfo'],
       rerankInfo: (m.rerank_info ?? m.rerankInfo ?? []) as ChatMessageType['rerankInfo'],
+      pipelineStages: (m.pipeline_stages ?? m.pipelineStages ?? []) as ChatMessageType['pipelineStages'],
       showRetrievalDetails: false,
     }))
     chat.lastQuestion.value = chat.messages.value

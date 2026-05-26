@@ -150,6 +150,8 @@ class VectorStoreManager:
         state_path.parent.mkdir(parents=True, exist_ok=True)
         content = json.dumps({
             "distance_function": "cosine",
+            "embedding_model": Config.EMBEDDING_MODEL,
+            "chunk_strategy": Config.CHUNK_STRATEGY,
             "documents": document_snapshot,
         }, ensure_ascii=False, indent=2)
         # 原子写入：先写临时文件，再 rename，防止崩溃时数据丢失
@@ -224,13 +226,56 @@ class VectorStoreManager:
         distance_function = state.get("distance_function", "l2") if state else None
         needs_distance_migration = has_index_files and distance_function != "cosine"
 
+        # 检测 Embedding 模型变化：模型不同则向量维度/语义空间不同，必须重建
+        # 旧索引无 embedding_model 字段，视为需要重建
+        indexed_embedding_model = state.get("embedding_model") if state else None
+        needs_embedding_rebuild = (
+            has_index_files
+            and indexed_embedding_model != Config.EMBEDDING_MODEL
+        )
+
+        # 检测分块策略变化：策略不同则分块结果不同，需要重建
+        indexed_chunk_strategy = state.get("chunk_strategy") if state else None
+        needs_chunk_strategy_rebuild = (
+            has_index_files
+            and indexed_chunk_strategy != Config.CHUNK_STRATEGY
+        )
+
+        # 统计向量库中实际的唯一文档来源数（ZIP 内文件归为顶层文档）
+        indexed_documents_count = 0
+        if has_index_files:
+            try:
+                if self.embeddings is None:
+                    self._load_embeddings()
+                self._reset_chroma_system_cache()
+                store = Chroma(
+                    persist_directory=Config.VECTOR_DB_PATH,
+                    embedding_function=self.embeddings,
+                    collection_metadata=self._COSINE_METADATA,
+                )
+                all_meta = store._collection.get(include=["metadatas"])
+                if all_meta and all_meta.get("metadatas"):
+                    top_level_names = set()
+                    for meta in all_meta["metadatas"]:
+                        src = meta.get("source", "") if meta else ""
+                        if src:
+                            # ZIP 内文件格式：archive.zip::inner_file，取 :: 前的文件名
+                            top_level_name = src.split("::")[0] if "::" in src else src
+                            top_level_names.add(top_level_name)
+                    indexed_documents_count = len(top_level_names)
+            except Exception:
+                pass
+
         return {
             "exists": has_index_files,
-            "current": is_current and not needs_distance_migration,
-            "stale": has_index_files and (not is_current or needs_distance_migration),
+            "current": is_current and not needs_distance_migration and not needs_embedding_rebuild and not needs_chunk_strategy_rebuild,
+            "stale": has_index_files and (not is_current or needs_distance_migration or needs_embedding_rebuild or needs_chunk_strategy_rebuild),
             "documents_count": len(current_snapshot),
+            "indexed_documents_count": indexed_documents_count,
             "distance_function": distance_function,
             "needs_distance_migration": needs_distance_migration,
+            "needs_embedding_rebuild": needs_embedding_rebuild,
+            "needs_chunk_strategy_rebuild": needs_chunk_strategy_rebuild,
             "embedding_dimension": VectorStoreManager._embedding_dimension,
         }
     
@@ -247,6 +292,39 @@ class VectorStoreManager:
         has_modifications = bool(diff["modified"])
         has_additions = bool(diff["added"])
         can_incremental = not has_deletions and not has_modifications
+
+        # 检测 Embedding 模型变化：模型不同则必须全量重建
+        # 旧索引无 embedding_model 字段，视为需要重建
+        indexed_embedding_model = old_state.get("embedding_model") if old_state else None
+        if indexed_embedding_model != Config.EMBEDDING_MODEL:
+            print(f"🔄 Embedding 模型变更（{indexed_embedding_model} → {Config.EMBEDDING_MODEL}），执行全量重建")
+            if trace_id:
+                log_pipeline(
+                    trace_id,
+                    chain,
+                    "vector_store_embedding_model_changed",
+                    "Embedding 模型变更，需要全量重建",
+                    old_model=indexed_embedding_model,
+                    new_model=Config.EMBEDDING_MODEL,
+                )
+            has_deletions = True  # 强制走全量重建路径
+            can_incremental = False
+
+        # 检测分块策略变化：策略不同则分块结果不同，需要全量重建
+        indexed_chunk_strategy = old_state.get("chunk_strategy") if old_state else None
+        if indexed_chunk_strategy != Config.CHUNK_STRATEGY:
+            print(f"🔄 分块策略变更（{indexed_chunk_strategy} → {Config.CHUNK_STRATEGY}），执行全量重建")
+            if trace_id:
+                log_pipeline(
+                    trace_id,
+                    chain,
+                    "vector_store_chunk_strategy_changed",
+                    "分块策略变更，需要全量重建",
+                    old_strategy=indexed_chunk_strategy,
+                    new_strategy=Config.CHUNK_STRATEGY,
+                )
+            has_deletions = True
+            can_incremental = False
 
         if trace_id:
             log_pipeline(
@@ -291,18 +369,31 @@ class VectorStoreManager:
             return  # 增量完成，无需全量重建
 
         # 无任何变更且向量库已存在，跳过重建
+        # 但需检查向量库中是否有残留的旧文档 chunk（source 不在快照中）
         if not has_deletions and not has_modifications and not has_additions:
             if self._vector_store_root().exists():
-                print("✅ 文档无变更，跳过知识库重建")
-                if trace_id:
-                    log_pipeline(
-                        trace_id,
-                        chain,
-                        "vector_store_skip",
-                        "文档无变更，跳过重建",
-                        unchanged_count=len(diff["unchanged"]),
-                    )
-                return
+                if self._has_stale_chunks(snapshot):
+                    print("⚠️ 检测到向量库中存在残留的旧文档 chunks，执行全量重建")
+                    if trace_id:
+                        log_pipeline(
+                            trace_id,
+                            chain,
+                            "vector_store_stale_chunks_detected",
+                            "向量库中存在残留的旧文档 chunks，需要全量重建",
+                        )
+                    # 强制走全量重建路径：标记为有删除
+                    has_deletions = True
+                else:
+                    print("✅ 文档无变更，跳过知识库重建")
+                    if trace_id:
+                        log_pipeline(
+                            trace_id,
+                            chain,
+                            "vector_store_skip",
+                            "文档无变更，跳过重建",
+                            unchanged_count=len(diff["unchanged"]),
+                        )
+                    return
 
         # 有删除或修改，全量重建
         if has_deletions or has_modifications:
@@ -391,6 +482,41 @@ class VectorStoreManager:
 
         return self.vector_store
 
+    def _has_stale_chunks(self, current_snapshot):
+        """检查向量库中是否存在不在当前快照中的旧文档 chunks。
+
+        比较向量库中所有 chunk 的 source 元数据与快照中的文档名，
+        如果有不匹配的 source（包括 ZIP 内文件格式的 source），
+        说明有残留的旧数据需要全量重建清理。
+        """
+        try:
+            if self.embeddings is None:
+                self._load_embeddings()
+            self._reset_chroma_system_cache()
+            store = Chroma(
+                persist_directory=Config.VECTOR_DB_PATH,
+                embedding_function=self.embeddings,
+                collection_metadata=self._COSINE_METADATA,
+            )
+            all_meta = store._collection.get(include=["metadatas"])
+            if not all_meta or not all_meta.get("metadatas"):
+                return False
+
+            # 构建当前快照中的文档名集合
+            snapshot_names = {d["name"] for d in current_snapshot} if current_snapshot else set()
+
+            for meta in all_meta["metadatas"]:
+                src = meta.get("source", "") if meta else ""
+                if not src:
+                    continue
+                # ZIP 内文件格式：archive.zip::inner_file，取 :: 前的文件名
+                top_level_name = src.split("::")[0] if "::" in src else src
+                if top_level_name not in snapshot_names:
+                    return True
+            return False
+        except Exception:
+            return False
+
     def _filter_documents_by_names(self, documents, names):
         """从文档列表中筛选属于指定文件名的 chunk。"""
         name_set = set(names)
@@ -426,20 +552,31 @@ class VectorStoreManager:
             )
 
         # ChromaDB collection.delete 按 metadata filter 删除
-        # 兼容 source 为纯文件名或完整路径的情况
+        # 兼容 source 为纯文件名、完整路径、ZIP 内文件 (archive.zip::file) 的情况
+        import os
+        source_patterns = [filename]
+        # 完整路径兼容（历史数据）
+        alt_source = os.path.join(Config.DOCUMENTS_PATH, filename)
+        source_patterns.append(alt_source)
+        # ZIP 内文件兼容：source 格式为 "archive.zip::inner_file"
+        zip_prefix = filename + "::"
+
         try:
-            # 先尝试纯文件名匹配（新数据）
-            result = store._collection.get(where={"source": filename})
-            if not result or not result.get("ids"):
-                # 回退：用 $or 匹配完整路径（历史数据兼容）
-                import os
-                alt_source = os.path.join(Config.DOCUMENTS_PATH, filename)
-                result = store._collection.get(where={"source": alt_source})
+            for pattern in source_patterns:
+                result = store._collection.get(where={"source": pattern})
                 if result and result.get("ids"):
-                    store._collection.delete(where={"source": alt_source})
-                # else: 无匹配记录，无需删除
-            else:
-                store._collection.delete(where={"source": filename})
+                    store._collection.delete(where={"source": pattern})
+
+            # 查找所有以 "filename::" 开头的 ZIP 内文件 source
+            all_meta = store._collection.get(include=["metadatas"])
+            if all_meta and all_meta.get("metadatas"):
+                zip_ids = []
+                for i, meta in enumerate(all_meta["metadatas"]):
+                    src = meta.get("source", "") if meta else ""
+                    if src.startswith(zip_prefix):
+                        zip_ids.append(all_meta["ids"][i])
+                if zip_ids:
+                    store._collection.delete(ids=zip_ids)
         except Exception as exc:
             print(f"Warning: 删除文档 chunks 失败 [{filename}]: {exc}")
             if trace_id:
@@ -485,6 +622,30 @@ class VectorStoreManager:
                 status=status,
                 vector_db_path=Config.VECTOR_DB_PATH,
             )
+        # Embedding 模型变更时旧向量库不兼容，不能加载
+        if status.get("needs_embedding_rebuild"):
+            if trace_id:
+                log_pipeline(
+                    trace_id,
+                    chain,
+                    "vector_store_load_skip_embedding_mismatch",
+                    "Embedding 模型已变更，旧向量库不兼容，需重建",
+                    old_model=status.get("embedding_model"),
+                    new_model=Config.EMBEDDING_MODEL,
+                )
+            return None
+        # 分块策略变更时需重建，不能加载旧向量库
+        if status.get("needs_chunk_strategy_rebuild"):
+            if trace_id:
+                log_pipeline(
+                    trace_id,
+                    chain,
+                    "vector_store_load_skip_chunk_strategy_mismatch",
+                    "分块策略已变更，需重建",
+                    old_strategy=status.get("chunk_strategy"),
+                    new_strategy=Config.CHUNK_STRATEGY,
+                )
+            return None
         if status["exists"]:
             self._reset_chroma_system_cache()
             self.vector_store = Chroma(

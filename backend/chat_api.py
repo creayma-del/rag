@@ -119,6 +119,7 @@ async def query(
             answer = result["answer"]
             retrieval_info = result["retrieval_info"]
             rerank_info = result["rerank_info"]
+            pipeline_stages = result.get("pipeline_stages", [])
 
             print(f"✅ 回答生成完成，长度: {len(answer)} 字符")
             log_pipeline(
@@ -157,6 +158,7 @@ async def query(
                 "trace_id": trace_id,
                 "retrieval_info": retrieval_info,
                 "rerank_info": rerank_info,
+                "pipeline_stages": pipeline_stages,
             }
         except ValueError as e:
             log_pipeline(
@@ -282,6 +284,7 @@ async def query_stream(
                         'retrieval_info': item['retrieval_info'],
                         'rerank_info': item['rerank_info'],
                         'used_reranker': item['used_reranker'],
+                        'pipeline_stages': item.get('pipeline_stages', []),
                         'trace_id': trace_id,
                     }
                     yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"

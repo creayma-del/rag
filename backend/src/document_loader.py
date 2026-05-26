@@ -5,26 +5,43 @@ from pathlib import Path, PurePosixPath
 
 from langchain_community.document_loaders import (
     TextLoader,
-    PyPDFLoader,
+    PyMuPDFLoader,
     Docx2txtLoader,
     UnstructuredMarkdownLoader,
     UnstructuredFileLoader,
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
 from config import Config
 from src.trace_logger import log_pipeline
 
 
 class DocumentLoader:
-    def __init__(self, trace_id=None, chain="document_build"):
+    def __init__(self, trace_id=None, chain="document_build", embeddings=None):
         self.last_errors = []
         self.trace_id = trace_id
         self.chain = chain
+        self.embeddings = embeddings
+        self.chunk_strategy = Config.CHUNK_STRATEGY
+
+        # 递归字符分块器（fallback 或用户选择）
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=Config.CHUNK_SIZE,
             chunk_overlap=Config.CHUNK_OVERLAP,
             length_function=len,
+            separators=["\n\n", "\n", "。", "！", "？", "；", "，", ". ", "! ", "? ", "; ", ", ", " ", ""],
         )
+
+        # 语义分块器（需要 embeddings 模型）
+        self.semantic_splitter = None
+        if self.chunk_strategy == "semantic" and embeddings is not None:
+            self.semantic_splitter = SemanticChunker(
+                embeddings=embeddings,
+                breakpoint_threshold_type=Config.SEMANTIC_BREAKPOINT_TYPE,
+                breakpoint_threshold_amount=Config.SEMANTIC_BREAKPOINT_AMOUNT,
+                min_chunk_size=Config.SEMANTIC_MIN_CHUNK_SIZE,
+                sentence_split_regex=r"(?<=[。！？；\.\!\?;])\s*",
+            )
 
     def _log(self, stage, message, **details):
         if self.trace_id:
@@ -46,7 +63,7 @@ class DocumentLoader:
         if ext in {".txt", ".markdown", ".csv", ".json", ".html", ".htm", ".xml", ".yml", ".yaml"}:
             return TextLoader(file_path, encoding="utf-8")
         if ext == ".pdf":
-            return PyPDFLoader(file_path)
+            return PyMuPDFLoader(file_path)
         if ext == ".docx":
             return Docx2txtLoader(file_path)
         if ext == ".md":
@@ -262,14 +279,38 @@ class DocumentLoader:
             "document_split_start",
             "开始切分文档",
             input_documents=len(documents),
+            chunk_strategy=self.chunk_strategy,
             chunk_size=Config.CHUNK_SIZE,
             chunk_overlap=Config.CHUNK_OVERLAP,
         )
+
+        if self.chunk_strategy == "semantic" and self.semantic_splitter is not None:
+            try:
+                split_docs = self.semantic_splitter.split_documents(documents)
+                self._log(
+                    "document_split_complete",
+                    "语义分块完成",
+                    input_documents=len(documents),
+                    chunks=len(split_docs),
+                    chunk_strategy="semantic",
+                    breakpoint_type=Config.SEMANTIC_BREAKPOINT_TYPE,
+                    breakpoint_amount=Config.SEMANTIC_BREAKPOINT_AMOUNT,
+                )
+                return split_docs
+            except Exception as exc:
+                self._log(
+                    "document_split_fallback",
+                    "语义分块失败，回退到递归字符分块",
+                    error=str(exc),
+                )
+                # fallback to recursive
+
         split_docs = self.text_splitter.split_documents(documents)
         self._log(
             "document_split_complete",
-            "文档切分完成",
+            "递归字符分块完成",
             input_documents=len(documents),
             chunks=len(split_docs),
+            chunk_strategy="recursive",
         )
         return split_docs

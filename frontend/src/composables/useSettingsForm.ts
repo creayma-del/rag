@@ -34,13 +34,18 @@ export function useSettingsForm() {
   const activeApiKey = ref('')
   const apiKeySearch = ref('')
   const hasUnsavedChanges = ref(false)
-  const initialRagConfig = ref({ chunk_size: 0, chunk_overlap: 0, embedding_model: '', reranker_model: '' })
+  const initialRagConfig = ref({ chunk_size: 0, chunk_overlap: 0, chunk_strategy: 'semantic', semantic_breakpoint_type: 'percentile', semantic_breakpoint_amount: 75, semantic_min_chunk_size: 100, embedding_model: '', reranker_model: '', use_reranker: false })
   const systemConfig = ref<SystemConfig>({
     chunk_size: 500,
     chunk_overlap: 50,
+    chunk_strategy: 'semantic',
+    semantic_breakpoint_type: 'percentile',
+    semantic_breakpoint_amount: 75,
+    semantic_min_chunk_size: 100,
     embedding_model: '',
     embedding_dimension: null,
     reranker_model: '',
+    use_reranker: false,
     default_model: '',
     max_tokens: 4096,
     temperature: 0.1,
@@ -99,8 +104,13 @@ export function useSettingsForm() {
       initialRagConfig.value = {
         chunk_size: systemConfig.value.chunk_size,
         chunk_overlap: systemConfig.value.chunk_overlap,
+        chunk_strategy: systemConfig.value.chunk_strategy,
+        semantic_breakpoint_type: systemConfig.value.semantic_breakpoint_type,
+        semantic_breakpoint_amount: systemConfig.value.semantic_breakpoint_amount,
+        semantic_min_chunk_size: systemConfig.value.semantic_min_chunk_size,
         embedding_model: systemConfig.value.embedding_model,
         reranker_model: systemConfig.value.reranker_model,
+        use_reranker: systemConfig.value.use_reranker,
       }
     } catch {
       ElMessage.error('加载系统配置失败')
@@ -138,8 +148,13 @@ export function useSettingsForm() {
       await api.updateSystemConfig({
         chunk_size: systemConfig.value.chunk_size,
         chunk_overlap: systemConfig.value.chunk_overlap,
+        chunk_strategy: systemConfig.value.chunk_strategy,
+        semantic_breakpoint_type: systemConfig.value.semantic_breakpoint_type,
+        semantic_breakpoint_amount: systemConfig.value.semantic_breakpoint_amount,
+        semantic_min_chunk_size: systemConfig.value.semantic_min_chunk_size,
         embedding_model: systemConfig.value.embedding_model,
         reranker_model: systemConfig.value.reranker_model,
+        use_reranker: systemConfig.value.use_reranker,
       })
       saved = true
 
@@ -150,18 +165,28 @@ export function useSettingsForm() {
         const ragChanged =
           systemConfig.value.chunk_size !== initialRagConfig.value.chunk_size ||
           systemConfig.value.chunk_overlap !== initialRagConfig.value.chunk_overlap ||
+          systemConfig.value.chunk_strategy !== initialRagConfig.value.chunk_strategy ||
+          systemConfig.value.semantic_breakpoint_type !== initialRagConfig.value.semantic_breakpoint_type ||
+          systemConfig.value.semantic_breakpoint_amount !== initialRagConfig.value.semantic_breakpoint_amount ||
+          systemConfig.value.semantic_min_chunk_size !== initialRagConfig.value.semantic_min_chunk_size ||
           systemConfig.value.embedding_model !== initialRagConfig.value.embedding_model ||
-          systemConfig.value.reranker_model !== initialRagConfig.value.reranker_model
+          systemConfig.value.reranker_model !== initialRagConfig.value.reranker_model ||
+          systemConfig.value.use_reranker !== initialRagConfig.value.use_reranker
 
         if (ragChanged) {
           initialRagConfig.value = {
             chunk_size: systemConfig.value.chunk_size,
             chunk_overlap: systemConfig.value.chunk_overlap,
+            chunk_strategy: systemConfig.value.chunk_strategy,
+            semantic_breakpoint_type: systemConfig.value.semantic_breakpoint_type,
+            semantic_breakpoint_amount: systemConfig.value.semantic_breakpoint_amount,
+            semantic_min_chunk_size: systemConfig.value.semantic_min_chunk_size,
             embedding_model: systemConfig.value.embedding_model,
             reranker_model: systemConfig.value.reranker_model,
+            use_reranker: systemConfig.value.use_reranker,
           }
           await ElMessageBox.confirm(
-            'RAG 核心参数（Chunk Size、Overlap、Embedding/Reranker 模型）已修改。\n\n' +
+            'RAG 核心参数（Chunk Size、Overlap、分块策略、Embedding/Reranker 模型）已修改。\n\n' +
             '需要重建知识库才能使新参数生效。是否现在前往文档管理页重建？',
             '参数变更提示',
             { confirmButtonText: '前往重建', cancelButtonText: '稍后', type: 'warning' }

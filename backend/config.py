@@ -55,16 +55,26 @@ class Config:
         os.getenv("DOCUMENTS_PATH"),
         "documents",
     )
-    MODEL_NAME = os.getenv("MODEL_NAME", "all-MiniLM-L6-v2")
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    MODEL_NAME = os.getenv("MODEL_NAME", "bge-small-zh-v1.5")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
     MAX_TOKENS = int(os.getenv("MAX_TOKENS", 4096))
     TEMPERATURE = float(os.getenv("TEMPERATURE", 0.1))
 
-    CHUNK_SIZE = 500
-    CHUNK_OVERLAP = 50
+    CHUNK_SIZE = 800
+    CHUNK_OVERLAP = 100
+    CHUNK_STRATEGY = os.getenv("CHUNK_STRATEGY", "semantic")  # "semantic" 或 "recursive"
+    SEMANTIC_BREAKPOINT_TYPE = os.getenv("SEMANTIC_BREAKPOINT_TYPE", "percentile")  # percentile / standard_deviation / interquartile / gradient
+    SEMANTIC_BREAKPOINT_AMOUNT = float(os.getenv("SEMANTIC_BREAKPOINT_AMOUNT", 75))  # 断点阈值（percentile 模式下 0-100）
+    SEMANTIC_MIN_CHUNK_SIZE = int(os.getenv("SEMANTIC_MIN_CHUNK_SIZE", 100))  # 语义分块最小 chunk 大小
     TOP_K = 5
     RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-base")
     RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 3))
+    USE_RERANKER = os.getenv("USE_RERANKER", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     BACKGROUND_PRELOAD_ENABLED = os.getenv("BACKGROUND_PRELOAD_ENABLED", "true").strip().lower() in {
         "1",
         "true",
@@ -100,7 +110,7 @@ class Config:
     ARCHIVE_MAX_UNCOMPRESSED_BYTES = int(
         os.getenv("ARCHIVE_MAX_UNCOMPRESSED_BYTES", 100 * 1024 * 1024)
     )
-    AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "admin").strip()
+
     INDEX_STATE_FILENAME = "_index_state.json"
     
     MODEL_CONFIGS = {
@@ -354,6 +364,8 @@ class Config:
     _persistent_keys = {
         "CHUNK_SIZE", "CHUNK_OVERLAP", "EMBEDDING_MODEL", "RERANKER_MODEL",
         "MAX_TOKENS", "TEMPERATURE", "TOP_K", "RERANKER_TOP_N",
+        "CHUNK_STRATEGY", "SEMANTIC_BREAKPOINT_TYPE", "SEMANTIC_BREAKPOINT_AMOUNT",
+        "SEMANTIC_MIN_CHUNK_SIZE", "USE_RERANKER",
     }
 
     @classmethod

@@ -154,14 +154,89 @@
         </div>
       </div>
 
-      <!-- Reranker 提示 -->
+      <!-- Reranker 结果详情 -->
       <div
         v-if="msg.role === 'ai' && msg.rerankInfo.length > 0 && showRetrieval"
         class="rerank-comparison"
       >
-        <div class="rerank-header">
-          <el-icon><RefreshRight /></el-icon>
-          <span>经过 Reranker 重排序后的结果</span>
+        <div
+          class="rerank-header"
+          @click="showRerankDetail = !showRerankDetail"
+        >
+          <div style="display:flex;align-items:center;gap:8px">
+            <el-icon><RefreshRight /></el-icon>
+            <span>经过 Reranker 重排序后的结果 ({{ msg.rerankInfo.length }} 个)</span>
+          </div>
+          <el-icon :class="['expand-icon', { expanded: showRerankDetail }]">
+            <ArrowRight />
+          </el-icon>
+        </div>
+        <div v-if="showRerankDetail" class="rerank-list">
+          <div
+            v-for="(doc, docIdx) in msg.rerankInfo"
+            :key="docIdx"
+            class="retrieval-item"
+          >
+            <div class="retrieval-item-header">
+              <span class="retrieval-index">#{{ doc.index + 1 }}</span>
+              <span class="retrieval-source">{{ doc.source }}</span>
+              <el-tag
+                v-if="doc.score !== undefined"
+                size="small"
+                type="warning"
+              >
+                Rerank: {{ doc.score.toFixed(4) }}
+              </el-tag>
+            </div>
+            <div class="retrieval-content">
+              {{ doc.content_preview || doc.content || '' }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RAG 管道阶段详情 -->
+      <div
+        v-if="msg.role === 'ai' && msg.pipelineStages.length > 0 && showRetrieval"
+        class="pipeline-stages"
+      >
+        <div
+          class="pipeline-stages-header"
+          @click="showPipelineDetail = !showPipelineDetail"
+        >
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="pipeline-icon">🔧</span>
+            <span>RAG 管道执行详情 ({{ msg.pipelineStages.length }} 个阶段)</span>
+          </div>
+          <el-icon :class="['expand-icon', { expanded: showPipelineDetail }]">
+            <ArrowRight />
+          </el-icon>
+        </div>
+        <div v-if="showPipelineDetail" class="pipeline-stages-list">
+          <div
+            v-for="(stage, sIdx) in msg.pipelineStages"
+            :key="sIdx"
+            class="pipeline-stage-item"
+          >
+            <div class="stage-item-header">
+              <span class="stage-item-order">{{ sIdx + 1 }}</span>
+              <span class="stage-item-label">{{ stage.label }}</span>
+              <el-tag v-if="stage.duration_ms" size="small" type="info">
+                {{ stage.duration_ms }}ms
+              </el-tag>
+            </div>
+            <p class="stage-item-desc">{{ stage.description }}</p>
+            <div class="stage-item-io">
+              <div class="stage-io-block">
+                <span class="io-label">输入</span>
+                <span class="io-value">{{ formatStageData(stage.input) }}</span>
+              </div>
+              <div class="stage-io-block">
+                <span class="io-label">输出</span>
+                <span class="io-value">{{ formatStageData(stage.output) }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -189,6 +264,17 @@ defineEmits<{
 }>()
 
 const renderedHtml = ref('')
+const showRerankDetail = ref(false)
+const showPipelineDetail = ref(false)
+
+function formatStageData(data: Record<string, unknown>): string {
+  return Object.entries(data)
+    .map(([k, v]) => {
+      const val = Array.isArray(v) ? v.slice(0, 5).join(', ') + (v.length > 5 ? '...' : '') : String(v ?? '-')
+      return `${k}: ${val}`
+    })
+    .join(' | ')
+}
 
 watch(
   () => props.msg.content,
@@ -420,10 +506,113 @@ watch(
 
 .rerank-header {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.rerank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+/* 管道阶段详情 */
+.pipeline-stages {
+  margin-top: 8px;
+  background: rgba(0, 245, 147, 0.03);
+  border: 1px solid rgba(0, 245, 147, 0.12);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.pipeline-stages-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pipeline-stages-header:hover {
+  background: rgba(0, 245, 147, 0.05);
+}
+
+.pipeline-icon {
+  font-size: 14px;
+}
+
+.pipeline-stages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.pipeline-stage-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.stage-item-header {
+  display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 4px;
+}
+
+.stage-item-order {
+  font-size: 11px;
+  font-weight: 700;
+  color: #00f593;
+  min-width: 18px;
+}
+
+.stage-item-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.stage-item-desc {
   font-size: 12px;
-  color: var(--accent-secondary);
+  color: var(--text-muted);
+  margin: 4px 0 8px;
+  line-height: 1.4;
+}
+
+.stage-item-io {
+  display: flex;
+  gap: 12px;
+}
+
+.stage-io-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.io-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.io-value {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: monospace;
+  word-break: break-all;
+  line-height: 1.4;
 }
 
 /* Markdown 内容 */

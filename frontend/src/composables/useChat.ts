@@ -159,6 +159,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
       (d: ChatMessage['retrievalInfo'][0], i: number) => ({ ...d, index: i })
     )
     const rerankInfo = ((res.data.rerank_info ?? []) as ChatMessage['rerankInfo'])
+    const pipelineStages = ((res.data.pipeline_stages ?? []) as ChatMessage['pipelineStages'])
 
     if (targetMsgId !== undefined) {
       // 重新生成：更新已有占位消息
@@ -168,6 +169,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
         messages.value[idx].content = answer
         messages.value[idx].retrievalInfo = retrievalInfo
         messages.value[idx].rerankInfo = rerankInfo
+        messages.value[idx].pipelineStages = pipelineStages
         messages.value[idx].showRetrievalDetails = false
         messages.value[idx].isInterrupted = false
         return
@@ -181,6 +183,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
       lastMsg.content = answer
       lastMsg.retrievalInfo = retrievalInfo
       lastMsg.rerankInfo = rerankInfo
+      lastMsg.pipelineStages = pipelineStages
       lastMsg.showRetrievalDetails = false
       lastMsg.isInterrupted = false
     } else {
@@ -190,6 +193,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
         content: answer,
         retrievalInfo,
         rerankInfo,
+        pipelineStages,
         showRetrievalDetails: false,
       })
     }
@@ -209,6 +213,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
         messages.value[targetIdx].content = ''
         messages.value[targetIdx].retrievalInfo = []
         messages.value[targetIdx].rerankInfo = []
+        messages.value[targetIdx].pipelineStages = []
         messages.value[targetIdx].isInterrupted = false
       }
       lastQuestion.value = question
@@ -219,6 +224,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
         content: '',
         retrievalInfo: [],
         rerankInfo: [],
+        pipelineStages: [],
         showRetrievalDetails: false,
       })
     }
@@ -286,6 +292,9 @@ export function useChat(externalSessionId?: Ref<string | null>) {
               }
               if (data.rerank_info) {
                 messages.value[msgIdx].rerankInfo = data.rerank_info
+              }
+              if (data.pipeline_stages) {
+                messages.value[msgIdx].pipelineStages = data.pipeline_stages
               }
             } else if (data.chunk) {
               messages.value[msgIdx].content += data.chunk
@@ -377,7 +386,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
     const question = inputText.value.trim()
     inputText.value = ''
     lastQuestion.value = question
-    messages.value.push({ id: nextMsgId(), role: 'user', content: question, retrievalInfo: [], rerankInfo: [], showRetrievalDetails: false })
+    messages.value.push({ id: nextMsgId(), role: 'user', content: question, retrievalInfo: [], rerankInfo: [], pipelineStages: [], showRetrievalDetails: false })
     loading.value = true
 
     try {
@@ -424,6 +433,7 @@ export function useChat(externalSessionId?: Ref<string | null>) {
       content: '',
       retrievalInfo: [],
       rerankInfo: [],
+      pipelineStages: [],
       showRetrievalDetails: false,
     })
     loading.value = true

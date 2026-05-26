@@ -1,56 +1,5 @@
 import axios, { type AxiosProgressEvent, type AxiosError } from 'axios'
-
-// ---- Token 管理 ----
-
-const TOKEN_KEY = 'rag-auth-token'
-const TOKEN_EXPIRY_KEY = 'rag-auth-token-expiry'
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
-  // 解析 JWT payload 获取过期时间
-  try {
-    const parts = token.split('.')
-    if (parts.length === 3) {
-      const payload = JSON.parse(atob(parts[1]))
-      if (payload.exp) {
-        localStorage.setItem(TOKEN_EXPIRY_KEY, String(payload.exp * 1000))
-        return
-      }
-    }
-  } catch {
-    // 解析失败，不存储过期时间
-  }
-  localStorage.removeItem(TOKEN_EXPIRY_KEY)
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(TOKEN_EXPIRY_KEY)
-}
-
-export function isAuthenticated(): boolean {
-  const token = getToken()
-  if (!token) return false
-  // 检查 token 是否过期
-  const expiryStr = localStorage.getItem(TOKEN_EXPIRY_KEY)
-  if (expiryStr) {
-    const expiry = Number(expiryStr)
-    if (!isNaN(expiry) && Date.now() >= expiry) {
-      clearToken()
-      return false
-    }
-  }
-  return true
-}
-
-// 命名导出 verifyAuth，供路由守卫等服务端验证场景使用
-export async function verifyAuth(): Promise<void> {
-  await api.get('/auth/verify')
-}
+import { reactive } from 'vue'
 
 // ---- Axios 实例 ----
 
@@ -59,26 +8,26 @@ const api = axios.create({
   timeout: 120000,
 })
 
-// 请求拦截器：自动附带 JWT Token
+// ---- 全局请求追踪（用于导航守卫） ----
+
+export const requestTracker = reactive({
+  pendingCount: 0,
+})
+
 api.interceptors.request.use((config) => {
-  const token = getToken()
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
+  requestTracker.pendingCount++
   return config
 })
 
-// 响应拦截器：401 自动跳转登录页
 api.interceptors.response.use(
-  (response) => response,
-  (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      clearToken()
-      // 不在此处直接跳转，由 router guard 统一处理
-      window.dispatchEvent(new CustomEvent('auth:unauthorized'))
-    }
+  (response) => {
+    requestTracker.pendingCount = Math.max(0, requestTracker.pendingCount - 1)
+    return response
+  },
+  (error) => {
+    requestTracker.pendingCount = Math.max(0, requestTracker.pendingCount - 1)
     return Promise.reject(error)
-  }
+  },
 )
 
 // ---- 请求重试（仅 GET 请求，网络错误） ----
@@ -107,9 +56,14 @@ api.interceptors.response.use(undefined, async (error: AxiosError) => {
 export interface SystemConfig {
   chunk_size: number
   chunk_overlap: number
+  chunk_strategy: string
+  semantic_breakpoint_type: string
+  semantic_breakpoint_amount: number
+  semantic_min_chunk_size: number
   embedding_model: string
   embedding_dimension: number | null
   reranker_model: string
+  use_reranker: boolean
   default_model: string
   max_tokens: number
   temperature: number
@@ -123,8 +77,13 @@ export interface SystemConfig {
 export interface SystemConfigRequest {
   chunk_size?: number
   chunk_overlap?: number
+  chunk_strategy?: string
+  semantic_breakpoint_type?: string
+  semantic_breakpoint_amount?: number
+  semantic_min_chunk_size?: number
   embedding_model?: string
   reranker_model?: string
+  use_reranker?: boolean
 }
 
 export interface QueryParams {
@@ -152,11 +111,6 @@ export interface StreamingQueryParams {
 // ---- API 方法 ----
 
 export default {
-  // 认证
-  login: (password: string) =>
-    api.post('/auth/login', { password }),
-  verifyAuth: () => api.get('/auth/verify'),
-
   healthCheck: () => api.get('/health'),
   preloadModels: () => api.get('/preload'),
   preloadModelRuntime: (data: { model: string; use_reranker: boolean }) =>
@@ -191,10 +145,6 @@ export default {
   // 流式查询 (POST)
   queryStreamPost: async (data: StreamingQueryParams, signal?: AbortSignal) => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    const token = getToken()
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
     const res = await fetch('/api/query/stream', {
       method: 'POST',
       headers,
@@ -202,10 +152,6 @@ export default {
       signal,
     })
     if (!res.ok) {
-      if (res.status === 401) {
-        clearToken()
-        window.dispatchEvent(new CustomEvent('auth:unauthorized'))
-      }
       const errorData = await res.json().catch(() => ({}))
       throw new Error(errorData.detail || `HTTP ${res.status}: ${res.statusText}`)
     }
@@ -227,4 +173,18 @@ export default {
   // 系统配置 API
   getSystemConfig: () => api.get('/config/system'),
   updateSystemConfig: (data: SystemConfigRequest) => api.post('/config/system', data),
+
+  // RAG 管道 API
+  getPipelineStages: () => api.get('/pipeline/stages'),
+  getIndexingStatus: () => api.get('/pipeline/indexing/status'),
+  listChunks: (params?: { source?: string; limit?: number; offset?: number }) =>
+    api.get('/pipeline/chunks', { params }),
+  getChunkDetail: (chunkId: string) => api.get(`/pipeline/chunks/${encodeURIComponent(chunkId)}`),
+  listSources: () => api.get('/pipeline/sources'),
+
+  // 离线索引预览 API
+  getIngestionPreview: () => api.get('/pipeline/ingestion/preview'),
+
+  // 在线查询预览 API
+  getQueryPreview: () => api.get('/pipeline/query/preview'),
 }
